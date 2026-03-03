@@ -18,9 +18,37 @@ public class WeaponDragSway : MonoBehaviour
 
     public Vector3 restPosition;
 
-    void Update()
-    {
+    public Transform swayTarget;
 
+    void Awake()
+    {
+        if (swayTarget == null)
+        {
+            swayTarget = transform;
+        }
+
+        if (reference == null)
+        {
+            reference = transform.root;
+        }
+
+        if (rb == null)
+        {
+            rb = GetComponentInParent<Rigidbody>();
+        }
+
+        currentRotation = Quaternion.identity;
+    }
+
+    void LateUpdate()
+    {
+        if (swayTarget == null || reference == null || rb == null)
+        {
+            return;
+        }
+
+        Vector3 animatedLocalPosition = swayTarget.localPosition;
+        Quaternion animatedLocalRotation = swayTarget.localRotation;
 
         Vector3 localVelocity = reference.InverseTransformDirection(rb.velocity);
 
@@ -39,9 +67,6 @@ public class WeaponDragSway : MonoBehaviour
             1f / smoothSpeed
         );
 
-        transform.localPosition = restPosition + currentOffset;
-
-
         float mouseX = Input.GetAxis("Mouse X");
         float mouseY = Input.GetAxis("Mouse Y");
 
@@ -59,7 +84,8 @@ public class WeaponDragSway : MonoBehaviour
             Time.deltaTime * rotationSmoothSpeed
         );
 
-        transform.localRotation = currentRotation;
+        swayTarget.localPosition = animatedLocalPosition + restPosition + currentOffset;
+        swayTarget.localRotation = animatedLocalRotation * currentRotation;
     }
 
     public Vector3 GetCurrentOffset()
@@ -71,6 +97,7 @@ public class WeaponDragSway : MonoBehaviour
     {
         return currentRotation;
     }
+
     public Vector3 GetTotalPositionOffset()
     {
         return restPosition + currentOffset;

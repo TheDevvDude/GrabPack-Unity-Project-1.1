@@ -5,18 +5,13 @@ public class RotateArms : MonoBehaviour
     public Transform rightHandBone;
     public Vector3 rightHitPoint;
     public bool rightActive = false;
-    private Quaternion rightBaseLocalRotation;
 
     public Transform leftHandBone;
     public Vector3 leftHitPoint;
     public bool leftActive = false;
-    private Quaternion leftBaseLocalRotation;
 
     public float maxPitch = 60f;
     public float maxYaw = 80f;
-
-    private bool initialized = false;
-
 
     void Start()
     {
@@ -25,13 +20,6 @@ public class RotateArms : MonoBehaviour
 
     void LateUpdate()
     {
-        if (!initialized)
-        {
-            rightBaseLocalRotation = rightHandBone.localRotation;
-            leftBaseLocalRotation = leftHandBone.localRotation;
-            initialized = true;
-        }
-
         RotateRightArm();
         RotateLeftArm();
     }
@@ -41,6 +29,8 @@ public class RotateArms : MonoBehaviour
         if (!rightActive) return;
         if (rightHitPoint == Vector3.zero) return;
         if (rightHandBone == null) return;
+
+        Quaternion rightBaseLocalRotation = rightHandBone.localRotation;
 
         Vector3 worldDir = (rightHitPoint - rightHandBone.position).normalized;
 
@@ -79,8 +69,10 @@ public class RotateArms : MonoBehaviour
         if (leftHitPoint == Vector3.zero) return;
         if (leftHandBone == null) return;
 
+        Quaternion leftBaseLocalRotation = leftHandBone.localRotation;
+
         Vector3 worldDir = (leftHitPoint - leftHandBone.position).normalized;
-        worldDir = -worldDir; 
+        worldDir = -worldDir;
         Quaternion targetWorldRot = Quaternion.LookRotation(worldDir);
 
         Quaternion targetLocalRot =

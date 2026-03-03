@@ -3,17 +3,12 @@ using UnityEngine;
 public class AnimatedCameraFollower : MonoBehaviour
 {
     public Transform animatedBone;
-    public WeaponDragSway swayScript;
+    public Vector3 localOffset;
 
     void LateUpdate()
     {
-        Vector3 worldOffset = animatedBone.TransformDirection(
-            swayScript.GetTotalPositionOffset()
-        );
+        transform.position = animatedBone.TransformPoint(localOffset);
 
-        transform.position = animatedBone.position - worldOffset;
-
-        Quaternion rotationOffset = swayScript.GetCurrentRotationOffset();
-        transform.rotation = animatedBone.rotation * Quaternion.Inverse(rotationOffset);
+        transform.rotation = animatedBone.rotation;
     }
 }
