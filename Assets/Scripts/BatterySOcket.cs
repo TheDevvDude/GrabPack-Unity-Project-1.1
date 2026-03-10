@@ -59,6 +59,9 @@ public class BatterySOcket : MonoBehaviour
 
     void LateUpdate()
     {
+        if (batterycollider == null)    
+            return;
+
         if (batterycollider.gameObject.transform.position != batteryPOS.transform.position)
         {
             full = false;

@@ -8,43 +8,34 @@ public class KeyCardScanner : MonoBehaviour
     public Animator doorAnimator;
 
     public KeyCard connectedCard;
+    public float interactionRange = 2f;
 
-    // Start is called before the first frame update
-    void Start()
-    {
-        
-    }
-
-    // Update is called once per frame
     void Update()
     {
-
-        if (Input.GetKeyDown(KeyCode.E))
+        if (Input.GetKeyDown(KeyCode.E) && connectedCard != null && connectedCard.PICKED)
         {
-            if (connectedCard.PICKED == true)
-            {
-                Camera cam = Camera.main;
-                Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+            TryInsertFromScreenPosition(Input.mousePosition);
+        }
+    }
 
-                if (Physics.Raycast(ray, out RaycastHit hit, 2f))
-                {
-                    if (hit.collider.gameObject == gameObject)
-                    {
-                        KeyCardScanner scanner = GetComponent<KeyCardScanner>();
-                        scanner.Insert();
-                    }
-                }
-            }
-
-
+    private void TryInsertFromScreenPosition(Vector3 screenPosition)
+    {
+        Camera cam = Camera.main;
+        if (cam == null)
+        {
+            return;
         }
 
+        Ray ray = cam.ScreenPointToRay(screenPosition);
+        if (Physics.Raycast(ray, out RaycastHit hit, interactionRange) && hit.collider.gameObject == gameObject)
+        {
+            Insert();
+        }
     }
 
     public void Insert()
     {
         animator.SetBool("insert", true);
         doorAnimator.SetBool("open", true);
-
     }
 }

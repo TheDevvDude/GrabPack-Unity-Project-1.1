@@ -15,13 +15,20 @@ public class WeaponDragSway : MonoBehaviour
 
     public Transform reference;
     public Rigidbody rb;
+    public RigidboyPlayerController playerController;
 
     public Vector3 restPosition;
 
+    void Start()
+    {
+        if (playerController == null)
+        {
+            playerController = FindObjectOfType<RigidboyPlayerController>();
+        }
+    }
+
     void Update()
     {
-
-
         Vector3 localVelocity = reference.InverseTransformDirection(rb.velocity);
 
         float forwardSpeed = Mathf.Max(0f, localVelocity.z);
@@ -41,9 +48,9 @@ public class WeaponDragSway : MonoBehaviour
 
         transform.localPosition = restPosition + currentOffset;
 
-
-        float mouseX = Input.GetAxis("Mouse X");
-        float mouseY = Input.GetAxis("Mouse Y");
+        Vector2 lookDelta = playerController != null ? playerController.CurrentLookDelta : Vector2.zero;
+        float mouseX = lookDelta.x;
+        float mouseY = lookDelta.y;
 
         Vector3 rotationOffset = new Vector3(
             -mouseY,
@@ -71,6 +78,7 @@ public class WeaponDragSway : MonoBehaviour
     {
         return currentRotation;
     }
+
     public Vector3 GetTotalPositionOffset()
     {
         return restPosition + currentOffset;

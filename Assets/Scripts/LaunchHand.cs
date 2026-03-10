@@ -5,15 +5,25 @@ using UnityEngine.UI;
 
 public class LaunchHand : MonoBehaviour
 {
+    private const string DebugSpawnInEditorPrefKey = "MobileUIBootstrap_DebugSpawnInEditor";
+    private float nextDebugLogTime;
+    private bool lastLoggedCanReturn;
+    private bool lastLoggedCanDrag;
+    private bool lastLoggedReturned = true;
+    private bool lastLoggedIsReturning;
+    private bool lastLoggedMobileHeld;
+    private bool lastLoggedCurrentHeld;
+    private string lastLoggedHitName;
+    private bool lastLoggedHitObjWasNull = true;
+    private bool lastLoggedAttachedToParentWasNull = true;
+    private string lastLoggedAttachedParentName;
     private bool mouseHeld = false;
     public Transform limonpos;
     private bool awaitingSecondInput = false;
 
-
     private float pressureHoldTimer = 0f;
-    public float pressureStartDelay = 0.5f; 
+    public float pressureStartDelay = 0.5f;
     private bool pressureBuilding = false;
-
 
     private float mouseDownTime;
     public CableManager cableManager;
@@ -38,9 +48,6 @@ public class LaunchHand : MonoBehaviour
 
     public CablePhysics CableSim;
 
-
-    //public LineRenderer cableRenderer;
-
     public GameObject hitOBJ;
 
     public Vector3 selftransform;
@@ -64,7 +71,6 @@ public class LaunchHand : MonoBehaviour
 
     public RotateArms aimOverride;
 
-
     public bool isPressureHand = false;
     public float pressure = 0;
 
@@ -76,33 +82,49 @@ public class LaunchHand : MonoBehaviour
 
     public GameObject Crosshair;
 
+    public bool mobileControlsEnabled = true;
+    public bool useScreenCenterAimOnMobile = true;
+    public bool debugMobileInEditor = false;
+
+    private bool mobileButtonHeld;
+    private bool mobileButtonDown;
+    private bool mobileButtonUp;
+    private bool currentButtonHeld;
+    private bool currentButtonDown;
+    private bool currentButtonUp;
+    private Vector2 mobileAimScreenPosition;
+
+    public bool MobileControlsActive => mobileControlsEnabled && IsMobileControlsRuntimeActive();
+    public bool IsActionHeld => currentButtonHeld || mobileButtonHeld;
+
     void Start()
     {
-        //cableRenderer.enabled = false;
-
         originalParent = handTransform.parent;
-
         selftransform = gameObject.transform.localScale;
+        lastLoggedCanReturn = CanReturn;
+        lastLoggedCanDrag = canDrag;
+        lastLoggedReturned = returned;
+        lastLoggedIsReturning = isReturning;
+        lastLoggedMobileHeld = mobileButtonHeld;
+        lastLoggedCurrentHeld = currentButtonHeld;
+        LogDebug($"Start MobileControlsActive={MobileControlsActive} GrabableLayer={GrabableLayer}");
     }
 
     void Update()
     {
-        if (isReturning) return;
-
-        bool isLeft = Hand == "Left";
-        bool isRight = Hand == "Right";
-
-        bool mouseDown = (isLeft && Input.GetMouseButtonDown(0)) ||
-                         (isRight && Input.GetMouseButtonDown(1));
-
-        bool mouseHeldNow = (isLeft && Input.GetMouseButton(0)) ||
-                            (isRight && Input.GetMouseButton(1));
-
-        bool mouseUp = (isLeft && Input.GetMouseButtonUp(0)) ||
-                       (isRight && Input.GetMouseButtonUp(1));
-
-        if (mouseDown)
+        if (isReturning)
         {
+            UpdateInputState();
+            LogStateChanges();
+            return;
+        }
+
+        UpdateInputState();
+        LogStateChanges();
+
+        if (currentButtonDown)
+        {
+            LogDebug($"ButtonDown returned={returned} awaitingSecondInput={awaitingSecondInput} canDrag={canDrag} canReturn={CanReturn} held={IsActionHeld}");
             mouseHeld = true;
 
             if (returned)
@@ -115,18 +137,21 @@ public class LaunchHand : MonoBehaviour
             if (!returned && !awaitingSecondInput)
             {
                 awaitingSecondInput = true;
-                mouseDownTime = Time.time; 
+                mouseDownTime = Time.time;
+                LogDebug("Second input armed for attached hand state.");
                 return;
             }
         }
 
-        if (mouseUp)
+        if (currentButtonUp)
         {
+            LogDebug($"ButtonUp returned={returned} awaitingSecondInput={awaitingSecondInput} canDrag={canDrag} canReturn={CanReturn}");
             mouseHeld = false;
 
             if (!returned && !awaitingSecondInput)
             {
                 awaitingSecondInput = true;
+                LogDebug("ButtonUp armed second input because hand was still out.");
                 return;
             }
 
@@ -134,6 +159,7 @@ public class LaunchHand : MonoBehaviour
             {
                 if (!isPressureHand && canDrag == true || isPressureHand && canDrag == false || !isPressureHand && canDrag == false)
                 {
+                    LogDebug("Starting ReturnHand from button release path.");
                     CanReturn = true;
                     StartCoroutine(ReturnHand());
                 }
@@ -142,13 +168,16 @@ public class LaunchHand : MonoBehaviour
             }
         }
     }
+
     public void EnableDrag()
     {
         canDrag = true;
+        LogDebug($"EnableDrag called. hitOBJ={(hitOBJ != null ? hitOBJ.name : "null")}");
     }
 
     public void FireHand()
     {
+        LogDebug($"FireHand start MobileControlsActive={MobileControlsActive} aim={GetAimScreenPosition()} holdingBattery={holdingbattery}");
         globalAudio.PlayOneShot(firesfx, 0.7f);
 
         CableSim.isActive = true;
@@ -166,6 +195,7 @@ public class LaunchHand : MonoBehaviour
 
         if (holdingbattery)
         {
+            LogDebug("FireHand is throwing carried battery.");
             holdingbattery = false;
             battery.transform.parent = null;
             Rigidbody batteryRB = battery.GetComponent<Rigidbody>();
@@ -177,13 +207,11 @@ public class LaunchHand : MonoBehaviour
             {
                 batteryRB.AddForce(-transform.up * 800f, ForceMode.Impulse);
                 aimOverride.leftActive = false;
-
             }
             if (Hand == "Right")
             {
                 batteryRB.AddForce(transform.up * 800f, ForceMode.Impulse);
                 aimOverride.rightActive = false;
-
             }
 
             CableSim.isActive = false;
@@ -193,23 +221,29 @@ public class LaunchHand : MonoBehaviour
             handgrabbing.SetBool("grabbing", false);
 
             return;
-
-
-
         }
         CanReturn = true;
-        //cableRenderer.enabled = true;
 
-
-        if (isReturning) return;
+        if (isReturning)
+        {
+            LogDebug("FireHand aborted because hand is returning.");
+            return;
+        }
         playeranimations.SetTrigger("shoot");
         handTransform.parent = null;
         returned = false;
         Vector3 targetPoint;
         Camera cam = Camera.main;
-        Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+        if (cam == null)
+        {
+            LogDebug("FireHand aborted because Camera.main is null.");
+            return;
+        }
+
+        Ray ray = cam.ScreenPointToRay(GetAimScreenPosition());
         if (Physics.Raycast(ray, out RaycastHit hit, maxRange))
         {
+            LogDebug($"Raycast hit {hit.collider.gameObject.name} tag={hit.collider.gameObject.tag} layer={LayerMask.LayerToName(hit.collider.gameObject.layer)} distance={hit.distance:0.00}");
             targetPoint = hit.point;
 
             if (Hand == "Right")
@@ -234,45 +268,44 @@ public class LaunchHand : MonoBehaviour
 
             if (hit.collider.gameObject.tag == (GrabableLayer))
             {
+                LogDebug($"Hit matches grab layer/tag. Preparing attach to {hit.collider.gameObject.name}");
                 CanReturn = false;
-                //handTransform.parent = hit.collider.gameObject.transform;
-
-
 
                 hitOBJ = hit.collider.gameObject;
                 if (LayerMask.LayerToName(hitOBJ.layer) == "Battery")
                 {
                     holdingbattery = true;
                     handgrabbing.SetBool("grabbing", true);
-
-
-
+                    LogDebug("Hit object is battery. holdingbattery=true");
                 }
                 if (hitOBJ.GetComponent<HandScanner>() == true)
                 {
                     handgrabbing.SetBool("grabbing", false);
+                    LogDebug("Hit object has HandScanner. grabbing animation disabled.");
                 }
                 if (hitOBJ.GetComponent<Rigidbody>() != null)
                 {
+                    LogDebug($"Hit object has Rigidbody. Scheduling EnableDrag for {hitOBJ.name}");
                     if (hitOBJ.GetComponent<Barricade>() != null)
                     {
                         br = hitOBJ.GetComponent<Barricade>();
-
+                        LogDebug("Hit object is Barricade.");
                     }
                     if (!isPressureHand)
                     {
                         handgrabbing.SetBool("grabbing", true);
-
                     }
 
                     Invoke("EnableDrag", 0.5f);
-
+                }
+                else
+                {
+                    LogDebug($"Hit object {hitOBJ.name} has no Rigidbody. Drag will not activate.");
                 }
                 if (LayerMask.LayerToName(hitOBJ.layer) == "Grabanimation" || LayerMask.LayerToName(hitOBJ.layer) == "Minecart" || LayerMask.LayerToName(hitOBJ.layer) == "KeyCard")
                 {
                     handgrabbing.SetBool("grabbing", true);
                 }
-
 
                 if (Hand == "Right")
                 {
@@ -284,12 +317,16 @@ public class LaunchHand : MonoBehaviour
                     Vector3 projectedForward = Vector3.ProjectOnPlane(transform.forward, hit.normal);
                     handTransform.rotation = Quaternion.LookRotation(projectedForward, hit.normal);
                 }
-
+            }
+            else
+            {
+                LogDebug($"Raycast hit {hit.collider.gameObject.name} but tag '{hit.collider.gameObject.tag}' does not match GrabableLayer '{GrabableLayer}'");
             }
         }
         else
         {
             targetPoint = ray.origin + ray.direction * maxRange;
+            LogDebug($"Raycast missed. Sending hand to fallback target {targetPoint}");
         }
         Vector3 impactPoint = hit.point;
 
@@ -298,6 +335,7 @@ public class LaunchHand : MonoBehaviour
 
     private IEnumerator MoveHand(Vector3 target, Vector3 impactPoint)
     {
+        LogDebug($"MoveHand start target={target} impact={impactPoint} hitOBJ={(hitOBJ != null ? hitOBJ.name : "null")}");
         Vector3 start = handTransform.position;
         float distance = Vector3.Distance(start, target);
         float duration = distance / speed;
@@ -313,11 +351,11 @@ public class LaunchHand : MonoBehaviour
         handTransform.position = target;
         if (hitOBJ != null)
         {
+            LogDebug($"MoveHand attaching to {hitOBJ.name}");
             handTransform.position = impactPoint;
             handTransform.SetParent(hitOBJ.transform, true);
             if (LayerMask.LayerToName(hitOBJ.layer) == "Battery")
             {
-
                 if (hitOBJ.GetComponent<gear>() != null)
                 {
                     if (hitOBJ.transform.childCount == 2)
@@ -332,25 +370,21 @@ public class LaunchHand : MonoBehaviour
                         battery = hitOBJ;
                     }
                 }
-
-
-                //handTransform.parent = hitOBJ.transform;
-                //hitOBJ.transform.parent = handTransform;
-
-
-
-
             }
-
 
             lockReturn = true;
             StartCoroutine(UnlockReturn());
+        }
+        else
+        {
+            LogDebug("MoveHand finished with no hitOBJ attached.");
         }
 
         yield return new WaitForSeconds(0.1f);
 
         if (CanReturn)
         {
+            LogDebug("MoveHand auto-returning because CanReturn is true.");
             StartCoroutine(ReturnHand());
         }
     }
@@ -359,18 +393,25 @@ public class LaunchHand : MonoBehaviour
     {
         yield return new WaitForSeconds(0.1f);
         lockReturn = false;
+        LogDebug("UnlockReturn completed.");
     }
 
     public void return1()
     {
-        if (lockReturn) return;
+        if (lockReturn)
+        {
+            LogDebug("return1 ignored because lockReturn is true.");
+            return;
+        }
 
+        LogDebug("return1 called.");
         CanReturn = true;
         StartCoroutine(ReturnHand());
     }
 
     private IEnumerator ReturnHand()
     {
+        LogDebug($"ReturnHand start battery={(battery != null ? battery.name : "null")}");
         handTransform.parent = null;
 
         if (battery != null)
@@ -387,7 +428,6 @@ public class LaunchHand : MonoBehaviour
                 battery.transform.rotation = limonpos.rotation;
             }
 
-
             Rigidbody rb = battery.GetComponent<Rigidbody>();
             
             if (rb != null)
@@ -399,13 +439,11 @@ public class LaunchHand : MonoBehaviour
                 BoxCollider col1 = battery.GetComponent<BoxCollider>();
                 col1.enabled = false;
                 battery.transform.parent = handTransform;
-
             }
         }
 
         handgrabbing.SetBool("grabbing", true);
 
-        //dragsounds.SetActive(false);
         pressure = 0;
         globalAudio.PlayOneShot(grabsfx, 0.7f);
 
@@ -414,7 +452,6 @@ public class LaunchHand : MonoBehaviour
         if (batterychild == null)
         {
             batterychild = transform.Find("Gear");
-
         }
         if (batterychild == null)
         {
@@ -422,15 +459,9 @@ public class LaunchHand : MonoBehaviour
             battery = null;
         }
 
-
         isReturning = true;
         canDrag = false;
         hitOBJ = null;
-        Vector3 startPosition = handTransform.position;
-        Quaternion startRotation = handTransform.rotation;
-
-        float duration = Vector3.Distance(startPosition, handOrigin.position) / speed;
-        float elapsedTime = 0f;
 
         while (CableSim.GetCablePoints().Count > 1)
         {
@@ -469,7 +500,6 @@ public class LaunchHand : MonoBehaviour
         if (batterychild == null)
         {
             handgrabbing.SetBool("grabbing", false);
-
         }
 
         handTransform.position = handOrigin.position;
@@ -477,13 +507,10 @@ public class LaunchHand : MonoBehaviour
         handTransform.parent = originalParent;
         isReturning = false;
         returned = true;
-        // playeranimations.SetTrigger("return");
         canDrag = false;
-        // cableRenderer.enabled = false;
         CableSim.InitializeCable();
         CableSim.isActive = false;
         gameObject.transform.localScale = selftransform;
-
 
         if (Hand == "Right")
         {
@@ -493,21 +520,29 @@ public class LaunchHand : MonoBehaviour
         {
             aimOverride.leftActive = false;
         }
+
+        LogDebug("ReturnHand complete.");
     }
+
     void LateUpdate()
     {
         if (CanReturn || !canDrag || isReturning)
         {
+            if (ShouldEmitPeriodicDragLog())
+            {
+                LogDebug($"LateUpdate blocked CanReturn={CanReturn} canDrag={canDrag} isReturning={isReturning} held={IsActionHeld} parent={(handTransform.parent != null ? handTransform.parent.name : "null")}");
+            }
             dragsounds.SetActive(false);
+            ResetTransientInput();
             return;
         }
 
-        bool leftReleased = Hand == "Left" && Input.GetMouseButtonUp(0);
-        bool rightReleased = Hand == "Right" && Input.GetMouseButtonUp(1);
+        bool leftReleased = Hand == "Left" && currentButtonUp;
+        bool rightReleased = Hand == "Right" && currentButtonUp;
 
         if ((leftReleased || rightReleased) && isPressureHand)
         {
-
+            LogDebug("Pressure hand release detected in LateUpdate.");
             canDrag = false;
             CanReturn = true;
             GameObject grabbedObj = handTransform.parent?.gameObject;
@@ -524,7 +559,7 @@ public class LaunchHand : MonoBehaviour
                     {
                         if (pressure >= 1f)
                         {
-                            Vector3 launchDir =(grabbedObj.transform.position - handOrigin.position).normalized;
+                            Vector3 launchDir = (grabbedObj.transform.position - handOrigin.position).normalized;
 
                             float launchForce = pressure * 100f;
 
@@ -532,17 +567,14 @@ public class LaunchHand : MonoBehaviour
                             rb.isKinematic = false;
                             rb.AddForce(launchDir * launchForce, ForceMode.Impulse);
 
-
                             impact.Play();
                         }
-
                     }
                     else
                     {
                         if (pressure > 9f)
                         {
-                            Breakable breakable =
-                                grabbedObj.GetComponent<Breakable>();
+                            Breakable breakable = grabbedObj.GetComponent<Breakable>();
 
                             breakable.breakObject();
                             impact.Play();
@@ -556,50 +588,45 @@ public class LaunchHand : MonoBehaviour
             if (pressure >= 1f)
             {
                 globalAudio.PlayOneShot(pressureRelease, 2.0f);
-
             }
             pressure = 0f;
             pressurebuild.SetActive(false);
 
-
             Crosshair.SetActive(true);
 
             return1();
+            ResetTransientInput();
             return; 
         }
 
-        bool isHandActive =
-            (Hand == "Left" && Input.GetMouseButton(0)) ||
-            (Hand == "Right" && Input.GetMouseButton(1));
+        bool isHandActive = IsActionHeld;
 
         if (!CanReturn && canDrag && isHandActive)
         {
             GameObject grabbed = handTransform.parent?.gameObject;
-            if (grabbed == null) return;
+            if (grabbed == null)
+            {
+                LogDebug("LateUpdate drag aborted because grabbed parent is null.");
+                ResetTransientInput();
+                return;
+            }
 
             Rigidbody rb = grabbed.GetComponent<Rigidbody>();
-            if (rb == null) return;
+            if (rb == null)
+            {
+                LogDebug($"LateUpdate drag aborted because {grabbed.name} has no Rigidbody.");
+                ResetTransientInput();
+                return;
+            }
 
-            Vector3 targetPos = handOrigin.position;
-            string objectLayer = LayerMask.LayerToName(grabbed.layer);
+            if (ShouldEmitPeriodicDragLog())
+            {
+                LogDebug($"LateUpdate drag armed for {grabbed.name} velocity={rb.velocity} handPos={handTransform.position} origin={handOrigin.position} kinematic={rb.isKinematic} constraints={rb.constraints}");
+            }
 
             if (!isPressureHand)
             {
                 dragsounds.SetActive(true);
-
-                Vector3 direction = targetPos - rb.position;
-                float distance = direction.magnitude;
-
-                Vector3 dirNormalized = direction.normalized;
-
-                float constantPullForce = pullSpeed * 350; // increase this for stronger pull
-                float damping = 8f;
-
-                Vector3 force =
-                    dirNormalized * constantPullForce
-                    - rb.velocity * damping;
-
-                rb.AddForce(force, ForceMode.Force);
             }
             else
             {
@@ -636,12 +663,53 @@ public class LaunchHand : MonoBehaviour
         }
         else
         {
+            if (ShouldEmitPeriodicDragLog())
+            {
+                LogDebug($"LateUpdate not dragging CanReturn={CanReturn} canDrag={canDrag} held={isHandActive} parent={(handTransform.parent != null ? handTransform.parent.name : "null")}");
+            }
             dragsounds.SetActive(false);
+        }
+
+        ResetTransientInput();
+    }
+
+    void FixedUpdate()
+    {
+        if (CanReturn || !canDrag || isReturning || isPressureHand || !IsActionHeld)
+        {
+            return;
+        }
+
+        GameObject grabbed = handTransform.parent?.gameObject;
+        if (grabbed == null)
+        {
+            return;
+        }
+
+        Rigidbody rb = grabbed.GetComponent<Rigidbody>();
+        if (rb == null)
+        {
+            return;
+        }
+
+        rb.WakeUp();
+
+        Vector3 targetPos = handOrigin.position;
+        Vector3 direction = targetPos - rb.position;
+        Vector3 velocityCompensation = -rb.velocity * 12f;
+        Vector3 acceleration = direction * (pullSpeed * 45f) + velocityCompensation;
+
+        rb.AddForce(acceleration, ForceMode.Acceleration);
+
+        if (Time.frameCount % 15 == 0)
+        {
+            LogDebug($"FixedUpdate force on {grabbed.name} dir={direction} vel={rb.velocity} kinematic={rb.isKinematic} constraints={rb.constraints}");
         }
     }
 
     public void ForceImmediateReturn()
     {
+        LogDebug("ForceImmediateReturn called.");
         pressure = 0;
         StopAllCoroutines();
         CableSim.isActive = false;
@@ -655,7 +723,6 @@ public class LaunchHand : MonoBehaviour
         handTransform.position = handOrigin.position;
         handTransform.rotation = handOrigin.rotation;
 
-        //cableRenderer.enabled = false;
         CableSim.InitializeCable();
 
         if (Hand == "Right")
@@ -668,7 +735,178 @@ public class LaunchHand : MonoBehaviour
         }
     }
 
+    public void MobilePress()
+    {
+        if (!mobileControlsEnabled)
+        {
+            LogDebug("MobilePress ignored because mobileControlsEnabled is false.");
+            return;
+        }
 
+        mobileButtonHeld = true;
+        mobileButtonDown = true;
+        LogDebug($"MobilePress received. held={mobileButtonHeld} down={mobileButtonDown}");
+    }
+
+    public void MobileRelease()
+    {
+        if (!mobileControlsEnabled)
+        {
+            LogDebug("MobileRelease ignored because mobileControlsEnabled is false.");
+            return;
+        }
+
+        mobileButtonHeld = false;
+        mobileButtonUp = true;
+        LogDebug($"MobileRelease received. held={mobileButtonHeld} up={mobileButtonUp}");
+    }
+
+    public void SetAimScreenPosition(Vector2 screenPosition)
+    {
+        mobileAimScreenPosition = screenPosition;
+    }
+
+    private void UpdateInputState()
+    {
+        bool isLeft = Hand == "Left";
+        bool isRight = Hand == "Right";
+
+        bool allowMouseButtons = ShouldUseDesktopMouseButtons();
+
+        bool mouseDown = allowMouseButtons && ((isLeft && Input.GetMouseButtonDown(0)) ||
+                         (isRight && Input.GetMouseButtonDown(1)));
+
+        bool mouseHeldNow = allowMouseButtons && ((isLeft && Input.GetMouseButton(0)) ||
+                            (isRight && Input.GetMouseButton(1)));
+
+        bool mouseUp = allowMouseButtons && ((isLeft && Input.GetMouseButtonUp(0)) ||
+                       (isRight && Input.GetMouseButtonUp(1)));
+
+        currentButtonDown = mouseDown || mobileButtonDown;
+        currentButtonHeld = mouseHeldNow || mobileButtonHeld;
+        currentButtonUp = mouseUp || mobileButtonUp;
+    }
+
+    private Vector2 GetAimScreenPosition()
+    {
+        if (MobileControlsActive)
+        {
+            if (useScreenCenterAimOnMobile || mobileAimScreenPosition == Vector2.zero)
+            {
+                return new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+            }
+
+            return mobileAimScreenPosition;
+        }
+
+        return Input.mousePosition;
+    }
+
+    private void ResetTransientInput()
+    {
+        mobileButtonDown = false;
+        mobileButtonUp = false;
+        currentButtonDown = false;
+        currentButtonUp = false;
+    }
+
+    private bool IsMobileControlsRuntimeActive()
+    {
+        if (Application.isMobilePlatform)
+        {
+            return true;
+        }
+
+        return IsEditorDebugMobileActive();
+    }
+
+    private bool ShouldUseDesktopMouseButtons()
+    {
+        if (Application.isMobilePlatform)
+        {
+            return false;
+        }
+
+        return !IsEditorDebugMobileActive();
+    }
+
+    private bool IsEditorDebugMobileActive()
+    {
+        return Application.isEditor && (debugMobileInEditor || PlayerPrefs.GetInt(DebugSpawnInEditorPrefKey, 0) == 1);
+    }
+
+    private bool ShouldEmitPeriodicDragLog()
+    {
+        if (Time.unscaledTime < nextDebugLogTime)
+        {
+            return false;
+        }
+
+        nextDebugLogTime = Time.unscaledTime + 0.25f;
+        return true;
+    }
+
+    private void LogStateChanges()
+    {
+        if (lastLoggedCanReturn != CanReturn)
+        {
+            lastLoggedCanReturn = CanReturn;
+            LogDebug($"CanReturn -> {CanReturn}");
+        }
+
+        if (lastLoggedCanDrag != canDrag)
+        {
+            lastLoggedCanDrag = canDrag;
+            LogDebug($"canDrag -> {canDrag}");
+        }
+
+        if (lastLoggedReturned != returned)
+        {
+            lastLoggedReturned = returned;
+            LogDebug($"returned -> {returned}");
+        }
+
+        if (lastLoggedIsReturning != isReturning)
+        {
+            lastLoggedIsReturning = isReturning;
+            LogDebug($"isReturning -> {isReturning}");
+        }
+
+        if (lastLoggedMobileHeld != mobileButtonHeld)
+        {
+            lastLoggedMobileHeld = mobileButtonHeld;
+            LogDebug($"mobileButtonHeld -> {mobileButtonHeld}");
+        }
+
+        if (lastLoggedCurrentHeld != currentButtonHeld)
+        {
+            lastLoggedCurrentHeld = currentButtonHeld;
+            LogDebug($"currentButtonHeld -> {currentButtonHeld}");
+        }
+
+        bool hitObjIsNull = hitOBJ == null;
+        if (lastLoggedHitObjWasNull != hitObjIsNull || (!hitObjIsNull && lastLoggedHitName != hitOBJ.name))
+        {
+            lastLoggedHitObjWasNull = hitObjIsNull;
+            lastLoggedHitName = hitObjIsNull ? null : hitOBJ.name;
+            LogDebug($"hitOBJ -> {(hitObjIsNull ? "null" : hitOBJ.name)}");
+        }
+
+        Transform attachedParent = handTransform != null ? handTransform.parent : null;
+        bool attachedParentIsNull = attachedParent == null;
+        string attachedParentName = attachedParentIsNull ? null : attachedParent.name;
+        if (lastLoggedAttachedToParentWasNull != attachedParentIsNull || lastLoggedAttachedParentName != attachedParentName)
+        {
+            lastLoggedAttachedToParentWasNull = attachedParentIsNull;
+            lastLoggedAttachedParentName = attachedParentName;
+            LogDebug($"handTransform.parent -> {(attachedParentIsNull ? "null" : attachedParentName)}");
+        }
+    }
+
+    private void LogDebug(string message)
+    {
+        Debug.Log($"[LaunchHand:{Hand}] {message}");
+    }
 }
 
 

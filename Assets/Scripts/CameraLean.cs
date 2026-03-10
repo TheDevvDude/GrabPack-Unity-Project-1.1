@@ -10,7 +10,8 @@ public class CameraLean : MonoBehaviour
     public float tiltSpeed = 5f; 
     public float leanAngle = 15f;
     public GameObject mainCamera;
-    public float cameraLeanFactor = 0.5f; 
+    public float cameraLeanFactor = 0.5f;
+    public RigidboyPlayerController playerController;
 
     private Quaternion originalRotation;
     private Vector3 originalPosition;
@@ -24,6 +25,11 @@ public class CameraLean : MonoBehaviour
         originalPosition = transform.localPosition;
         currentBalanceRotation = originalRotation;
         currentTiltRotation = originalRotation;
+
+        if (playerController == null)
+        {
+            playerController = FindObjectOfType<RigidboyPlayerController>();
+        }
 
         if (mainCamera != null)
         {
@@ -40,8 +46,9 @@ public class CameraLean : MonoBehaviour
 
     void SwingObject()
     {
-        float mouseX = Input.GetAxis("Mouse X") * balanceIntensity;
-        float mouseY = Input.GetAxis("Mouse Y") * balanceIntensity;
+        Vector2 lookDelta = playerController != null ? playerController.CurrentLookDelta : Vector2.zero;
+        float mouseX = lookDelta.x * balanceIntensity;
+        float mouseY = lookDelta.y * balanceIntensity;
         Quaternion targetRotation = Quaternion.Euler(-mouseY, mouseX, 0);
 
         currentBalanceRotation = Quaternion.Lerp(currentBalanceRotation, targetRotation, Time.deltaTime * balanceSpeed);

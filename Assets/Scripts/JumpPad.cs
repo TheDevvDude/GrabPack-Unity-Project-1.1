@@ -75,6 +75,9 @@ public class JumpPad : MonoBehaviour
             launched = false;
         }
 
+        if (powerSource == null)
+            return;
+
         if (!Powered && powerSource.CircuitComplete)
         {
             Powered = true;
