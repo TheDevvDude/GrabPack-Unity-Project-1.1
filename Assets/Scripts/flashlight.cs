@@ -6,6 +6,9 @@ public class flashlight : MonoBehaviour
 {
     public Animator flashlightanimator;
     public bool isOn = false;
+
+    public HandManager handmanager;
+
     // Start is called before the first frame update
     void Start()
     {
@@ -15,18 +18,33 @@ public class flashlight : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.F))
+
+        if (handmanager.hasGrabPack == true)
         {
-            isOn = !isOn;
+            if (Input.GetKeyDown(KeyCode.F))
+            {
+                isOn = !isOn;
+            }
+
+            if (isOn)
+            {
+                flashlightanimator.SetBool("on", true);
+            }
+            if (!isOn)
+            {
+                flashlightanimator.SetBool("on", false);
+            }
         }
 
-        if (isOn)
+    }
+
+    public void toggleflashlight()
+    {
+        if (handmanager.hasGrabPack == true)
         {
-            flashlightanimator.SetBool("on", true);
+            isOn = !isOn;
+
         }
-        if (!isOn)
-        {
-            flashlightanimator.SetBool("on", false);
-        }
+
     }
 }

@@ -7,11 +7,13 @@ public class HandManager : MonoBehaviour
     public bool hasPurpleHand = true;
     public bool hasPressureHand = true;
     public bool hasConductiveHand = true;
+    public bool HasEMUCuffs = false;
 
     public bool hasGrabPack = true;
     public GameObject grabpack;
 
-    private bool lastGrabPackState; 
+    private bool lastGrabPackState;
+
 
     void Start()
     {

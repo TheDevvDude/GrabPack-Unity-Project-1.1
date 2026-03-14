@@ -13,7 +13,6 @@ Material:
   - _GLOSSYREFLECTIONS_OFF
   - _NORMALMAP
   - _PARALLAXMAP
-  - _SPECGLOSSMAP
   - _SPECULARHIGHLIGHTS_OFF
   m_InvalidKeywords:
   - _METALLICGLOSSMAP
@@ -44,11 +43,11 @@ Material:
         m_Offset: {x: 0, y: 0}
     - _EmissionMap:
         m_Texture: {fileID: 0}
-        m_Scale: {x: 0.5, y: 0.5}
+        m_Scale: {x: 0.4, y: 0.4}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
-        m_Texture: {fileID: 2800000, guid: 70354f7cec3f4384b8ce7ba7dd709f66, type: 3}
-        m_Scale: {x: 0.5, y: 0.5}
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 0.4, y: 0.4}
         m_Offset: {x: 0, y: 0}
     - _MetallicGlossMap:
         m_Texture: {fileID: 2800000, guid: f99513af54c76804da0f5ea87c6800a2, type: 3}
@@ -63,17 +62,17 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _SpecGlossMap:
-        m_Texture: {fileID: 2800000, guid: f99513af54c76804da0f5ea87c6800a2, type: 3}
+        m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _BumpScale: 2
+    - _BumpScale: 1
     - _Cutoff: 0.5
     - _DetailNormalMapScale: 1
     - _DstBlend: 0
-    - _GlossMapScale: 0.029
-    - _Glossiness: 0.785
+    - _GlossMapScale: 0
+    - _Glossiness: 0
     - _GlossyReflections: 0
     - _Metallic: 0
     - _Mode: 0
@@ -85,7 +84,7 @@ Material:
     - _UVSec: 0
     - _ZWrite: 1
     m_Colors:
-    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _Color: {r: 0.2756319, g: 0.3129215, b: 0.3584906, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
+    - _SpecColor: {r: 0.09433961, g: 0.09433961, b: 0.09433961, a: 1}
   m_BuildTextureStacks: []

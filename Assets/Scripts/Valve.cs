@@ -24,7 +24,14 @@ public class Valve : MonoBehaviour
 
         foreach (Transform child in transform)
         {
-            if (!child.name.StartsWith("Hand")) continue;
+            if (!child.name.StartsWith("Hand"))
+                continue;
+
+            LaunchHand hand = child.GetComponent<LaunchHand>();
+            if (hand == null)
+                continue;
+
+            bool isHeld = hand.IsHeld();
 
             bool rightHand =
                 child.name == "Hand_Rocket" ||
@@ -34,13 +41,13 @@ public class Valve : MonoBehaviour
 
             bool leftHand = child.name == "Hand_Blue";
 
-            if (rightHand && Input.GetMouseButton(1))
+            if (rightHand && isHeld)
             {
                 shouldAnimate = true;
                 break;
             }
 
-            if (leftHand && Input.GetMouseButton(0))
+            if (leftHand && isHeld)
             {
                 shouldAnimate = true;
                 break;

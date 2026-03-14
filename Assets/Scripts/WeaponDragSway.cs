@@ -18,48 +18,82 @@ public class WeaponDragSway : MonoBehaviour
 
     public Vector3 restPosition;
 
-    void Update()
+    public MobileIcons mobileIcons;
+
+    void Start()
     {
 
 
-        Vector3 localVelocity = reference.InverseTransformDirection(rb.velocity);
+    }
+    void Update()
+    {
+        if (mobileIcons.isMobile == false)
+        {
+            Vector3 localVelocity = reference.InverseTransformDirection(rb.velocity);
 
-        float forwardSpeed = Mathf.Max(0f, localVelocity.z);
+            float forwardSpeed = Mathf.Max(0f, localVelocity.z);
 
-        Vector3 targetOffset = new Vector3(
-            0f,
-            0f,
-            -forwardSpeed * swayAmount
-        );
+            Vector3 targetOffset = new Vector3(
+                0f,
+                0f,
+                -forwardSpeed * swayAmount
+            );
 
-        currentOffset = Vector3.SmoothDamp(
-            currentOffset,
-            targetOffset,
-            ref velocity,
-            1f / smoothSpeed
-        );
+            currentOffset = Vector3.SmoothDamp(
+                currentOffset,
+                targetOffset,
+                ref velocity,
+                1f / smoothSpeed
+            );
 
-        transform.localPosition = restPosition + currentOffset;
+            transform.localPosition = restPosition + currentOffset;
 
 
-        float mouseX = Input.GetAxis("Mouse X");
-        float mouseY = Input.GetAxis("Mouse Y");
+            float mouseX = Input.GetAxis("Mouse X");
+            float mouseY = Input.GetAxis("Mouse Y");
 
-        Vector3 rotationOffset = new Vector3(
-            -mouseY,
-            -mouseX,
-            0f
-        ) * rotationSwayAmount;
+            Vector3 rotationOffset = new Vector3(
+                -mouseY,
+                -mouseX,
+                0f
+            ) * rotationSwayAmount;
 
-        Quaternion targetRotation = Quaternion.Euler(rotationOffset);
+            Quaternion targetRotation = Quaternion.Euler(rotationOffset);
 
-        currentRotation = Quaternion.Slerp(
-            currentRotation,
-            targetRotation,
-            Time.deltaTime * rotationSmoothSpeed
-        );
+            currentRotation = Quaternion.Slerp(
+                currentRotation,
+                targetRotation,
+                Time.deltaTime * rotationSmoothSpeed
+            );
 
-        transform.localRotation = currentRotation;
+            transform.localRotation = currentRotation;
+        }
+
+        if (mobileIcons.isMobile == true)
+        {
+            Vector3 localVelocity = reference.InverseTransformDirection(rb.velocity);
+
+            float forwardSpeed = Mathf.Max(0f, localVelocity.z);
+
+            Vector3 targetOffset = new Vector3(
+                0f,
+                0f,
+                -forwardSpeed * swayAmount
+            );
+
+            currentOffset = Vector3.SmoothDamp(
+                currentOffset,
+                targetOffset,
+                ref velocity,
+                1f / smoothSpeed
+            );
+
+            transform.localPosition = restPosition + currentOffset;
+
+        }
+
+
+
     }
 
     public Vector3 GetCurrentOffset()

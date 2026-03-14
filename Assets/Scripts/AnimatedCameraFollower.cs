@@ -7,13 +7,22 @@ public class AnimatedCameraFollower : MonoBehaviour
 
     void LateUpdate()
     {
-        Vector3 worldOffset = animatedBone.TransformDirection(
-            swayScript.GetTotalPositionOffset()
-        );
+       // bool isMobile = Application.isMobilePlatform;
+        bool isMobile = false;
+
+        Vector3 worldOffset = Vector3.zero;
+        Quaternion rotationOffset = Quaternion.identity;
+
+        if (!isMobile)
+        {
+            worldOffset = animatedBone.TransformDirection(
+                swayScript.GetTotalPositionOffset()
+            );
+
+            rotationOffset = swayScript.GetCurrentRotationOffset();
+        }
 
         transform.position = animatedBone.position - worldOffset;
-
-        Quaternion rotationOffset = swayScript.GetCurrentRotationOffset();
-        transform.rotation = animatedBone.rotation * Quaternion.Inverse(rotationOffset);
+        //transform.rotation = animatedBone.rotation * Quaternion.Inverse(rotationOffset);
     }
 }

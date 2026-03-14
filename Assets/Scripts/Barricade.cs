@@ -33,7 +33,14 @@ public class Barricade : MonoBehaviour
 
         foreach (Transform child in transform)
         {
-            if (!child.name.StartsWith("Hand")) continue;
+            if (!child.name.StartsWith("Hand"))
+                continue;
+
+            LaunchHand hand = child.GetComponent<LaunchHand>();
+            if (hand == null)
+                continue;
+
+            bool isHeld = hand.IsHeld();
 
             bool rightHand =
                 child.name == "Hand_Rocket" ||
@@ -43,23 +50,21 @@ public class Barricade : MonoBehaviour
 
             bool leftHand = child.name == "Hand_Blue";
 
-            if (rightHand && Input.GetMouseButton(1))
+            if (rightHand && isHeld)
             {
                 PullBarricade();
                 isgrabbingRight = true;
                 rightHandFound = true;
             }
 
-            if (leftHand && Input.GetMouseButton(0) && !isgrabbingRight)
+            if (leftHand && isHeld && !isgrabbingRight)
             {
                 PullBarricade();
             }
         }
 
         if (!rightHandFound)
-        {
             isgrabbingRight = false;
-        }
     }
 
     void PullBarricade()

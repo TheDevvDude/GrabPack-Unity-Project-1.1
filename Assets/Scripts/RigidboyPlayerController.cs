@@ -1,8 +1,14 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
+using UnityEngine.UI;
 
 public class RigidboyPlayerController : MonoBehaviour
 {
+    public List<LaunchHand> allLaunchHands = new List<LaunchHand>();
+
+    public bool squeeze = false;
+
     private Coroutine footstepCoroutine;
 
     public Transform headCheck; 
@@ -11,6 +17,19 @@ public class RigidboyPlayerController : MonoBehaviour
     private float targetX;
     private float targetY;
     private float currentY;
+
+    private bool unlockingCamera = false;
+    private Quaternion unlockStartBodyRotation;
+    private Quaternion unlockStartCameraRotation;
+    private float unlockTimer = 0f;
+    public float unlockDuration = 0.4f;
+
+    public Vector2 squeezeCameraRotation = new Vector2(10f, 0f);
+    public float squeezeCameraLerpSpeed = 5f;
+    private Quaternion squeezeStartBodyRotation;
+    private Quaternion squeezeStartCameraRotation;
+    private bool lockCamera = false;
+    public Transform squeezeCameraTarget;
 
     public float moveSpeed = 5f;
     public float sprintMultiplier = 2f;
@@ -27,6 +46,9 @@ public class RigidboyPlayerController : MonoBehaviour
     private float targetMoveSpeed;
     private float rotationX = 0f;
 
+    public float squeezeSpeed = 2f;
+    private bool wasSqueezing = false;
+
     public Animator playeranimations;
     public float groundCheckDistance = 0.3f;
     public LayerMask groundLayer;
@@ -36,6 +58,9 @@ public class RigidboyPlayerController : MonoBehaviour
 
     public Animator croucher;
     private Vector3 moveDirection;
+
+    public bool CanMove = true;
+
 
     public GameObject RedHand;
     public GameObject PurpleHand;
@@ -83,6 +108,62 @@ public class RigidboyPlayerController : MonoBehaviour
 
     public HandManager handmanager;
 
+    public Image righthandIcon;
+
+
+    public Color red;
+    public Color purple;
+    public Color grey;
+    public Color yellow;
+
+
+    // for mobile controls
+    [HideInInspector] public Vector2 mobileMoveInput;
+    [HideInInspector] public Vector2 mobileLookInput;
+    [HideInInspector] public bool mobileJump;
+    [HideInInspector] public bool mobileSprint;
+    [HideInInspector] public bool mobileCrouch;
+
+    private bool sprintToggled = false;
+    private bool crouchToggled = false;
+
+    private float lastTapTime = 0f;
+    private float tapThreshold = 0.3f; 
+    private bool sprinting = false;
+
+    public MobileJoystick mobileJoystick;
+
+    public MobileIcons mobileIcons;
+
+    public GameObject Switcher;
+    public SwitchMenu switchmenu;
+
+    public GameObject redHandButton;
+    public GameObject purpleHandButton;
+    public GameObject flareHandButton;
+    public GameObject conductiveHandButton;
+
+    public bool canSwitch = true;
+
+
+    public void ToggleSprint()
+    {
+        sprintToggled = !sprintToggled;
+    }
+
+    public void ToggleCrouch()
+    {
+        crouchToggled = !crouchToggled;
+
+        if (crouchToggled)
+            sprintToggled = false;
+    }
+
+    public void MobileJump()
+    {
+        mobileJump = true;
+    }
+
     private bool CanStandUp()
     {
         return !Physics.SphereCast(headCheck.position, 0.3f, Vector3.up, out _, standUpCheckHeight, groundLayer);
@@ -90,6 +171,22 @@ public class RigidboyPlayerController : MonoBehaviour
 
     private void Start()
     {
+        switchmenu = Switcher.GetComponent<SwitchMenu>();
+        UpdateHandButtons();
+
+
+
+        if (mobileIcons.isMobile)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+        else
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+
         rb = GetComponent<Rigidbody>();
         rb.freezeRotation = true;
         currentMoveSpeed = moveSpeed;
@@ -99,8 +196,7 @@ public class RigidboyPlayerController : MonoBehaviour
         playeranimations.SetBool("switch", false);
         playeranimations.SetBool("jump", false);
         playeranimations.SetBool("crouch", false);
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+
 
 
         if (handmanager.hasRedHand == false)
@@ -128,83 +224,240 @@ public class RigidboyPlayerController : MonoBehaviour
 
     }
 
+    void OnEnterSqueeze()
+    {
+        sprintToggled = false;
+        targetMoveSpeed = squeezeSpeed;
+
+        if (IsCrouched)
+            ExitCrouch();
+
+        playeranimations.speed = 1f;
+
+        lockCamera = true;
+
+        squeezeStartBodyRotation = transform.localRotation;
+        squeezeStartCameraRotation = playerCamera.localRotation;
+
+    }
+
+    void OnExitSqueeze()
+    {
+        targetMoveSpeed = moveSpeed;
+
+        unlockingCamera = true;
+        lockCamera = false;
+
+        unlockStartBodyRotation = transform.localRotation;
+        unlockStartCameraRotation = playerCamera.localRotation;
+
+        unlockTimer = 0f;
+    }
+
+    public void UpdateHandButtons()
+    {
+        if (redHandButton != null)
+            redHandButton.SetActive(handmanager.hasRedHand);
+
+        if (purpleHandButton != null)
+            purpleHandButton.SetActive(handmanager.hasPurpleHand);
+
+        if (flareHandButton != null)
+            flareHandButton.SetActive(handmanager.hasPressureHand);
+
+        if (conductiveHandButton != null)
+            conductiveHandButton.SetActive(handmanager.hasConductiveHand);
+    }
+
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Alpha1) && handmanager.hasRedHand)
+        if (squeeze && !wasSqueezing)
         {
-            if (redcable.isActive == false && purplecable.isActive == false && pressurecable.isActive == false && conductivecable.isActive == false)
+            OnEnterSqueeze();
+        }
+        else if (!squeeze && wasSqueezing)
+        {
+            OnExitSqueeze();
+        }
+
+        wasSqueezing = squeeze;
+
+        if (canSwitch && !squeeze)
+        {
+            if (Input.GetKeyDown(KeyCode.Alpha1) && handmanager.hasRedHand)
             {
-                if (redlaunch.holdingbattery == false && purplelaunch.holdingbattery == false && pressurelaunch.holdingbattery == false && conductivelaunch.holdingbattery == false)
+                if (redcable.isActive == false && purplecable.isActive == false && pressurecable.isActive == false && conductivecable.isActive == false)
                 {
-                    playeranimations.SetBool("switch", true);
-                    handtoSwitch = "red";
-                    playeranimations.SetTrigger("Switch");
+                    if (redlaunch.holdingbattery == false && purplelaunch.holdingbattery == false && pressurelaunch.holdingbattery == false && conductivelaunch.holdingbattery == false)
+                    {
+                        canSwitch = false;
+                        playeranimations.SetBool("switch", true);
+                        handtoSwitch = "red";
+                        playeranimations.SetTrigger("Switch");
+
+                    }
 
                 }
-
             }
-        }
-        if (Input.GetKeyDown(KeyCode.Alpha2) && handmanager.hasPurpleHand)
-        {
-            if (redcable.isActive == false && purplecable.isActive == false && pressurecable.isActive == false && conductivecable.isActive == false)
+            if (Input.GetKeyDown(KeyCode.Alpha2) && handmanager.hasPurpleHand)
             {
-                if (redlaunch.holdingbattery == false && purplelaunch.holdingbattery == false && pressurelaunch.holdingbattery == false && conductivelaunch.holdingbattery == false)
+                if (redcable.isActive == false && purplecable.isActive == false && pressurecable.isActive == false && conductivecable.isActive == false)
                 {
-                    playeranimations.SetBool("switch", true);
-                    handtoSwitch = "purple";
-                    playeranimations.SetTrigger("Switch");
+                    if (redlaunch.holdingbattery == false && purplelaunch.holdingbattery == false && pressurelaunch.holdingbattery == false && conductivelaunch.holdingbattery == false)
+                    {
+                        canSwitch = false;
+
+                        playeranimations.SetBool("switch", true);
+                        handtoSwitch = "purple";
+                        playeranimations.SetTrigger("Switch");
+
+                    }
 
                 }
-
             }
-        }
-        if (Input.GetKeyDown(KeyCode.Alpha3) && handmanager.hasPressureHand)
-        {
-            if (redcable.isActive == false && purplecable.isActive == false && pressurecable.isActive == false && conductivecable.isActive == false)
+            if (Input.GetKeyDown(KeyCode.Alpha3) && handmanager.hasPressureHand)
             {
-                if (redlaunch.holdingbattery == false && purplelaunch.holdingbattery == false && pressurelaunch.holdingbattery == false && conductivelaunch.holdingbattery == false)
+                if (redcable.isActive == false && purplecable.isActive == false && pressurecable.isActive == false && conductivecable.isActive == false)
                 {
-                    playeranimations.SetBool("switch", true);
-                    handtoSwitch = "flare";
-                    playeranimations.SetTrigger("Switch");
+                    if (redlaunch.holdingbattery == false && purplelaunch.holdingbattery == false && pressurelaunch.holdingbattery == false && conductivelaunch.holdingbattery == false)
+                    {
+                        canSwitch = false;
+
+                        playeranimations.SetBool("switch", true);
+                        handtoSwitch = "flare";
+                        playeranimations.SetTrigger("Switch");
+
+                    }
 
                 }
-
             }
-        }
-        if (Input.GetKeyDown(KeyCode.Alpha4) && handmanager.hasConductiveHand)
-        {
-            if (redcable.isActive == false && purplecable.isActive == false && pressurecable.isActive == false && conductivecable.isActive == false)
+            if (Input.GetKeyDown(KeyCode.Alpha4) && handmanager.hasConductiveHand)
             {
-                if (redlaunch.holdingbattery == false && purplelaunch.holdingbattery == false && pressurelaunch.holdingbattery == false && conductivelaunch.holdingbattery == false)
+                if (redcable.isActive == false && purplecable.isActive == false && pressurecable.isActive == false && conductivecable.isActive == false)
                 {
-                    playeranimations.SetBool("switch", true);
-                    playeranimations.SetTrigger("Switch");
+                    if (redlaunch.holdingbattery == false && purplelaunch.holdingbattery == false && pressurelaunch.holdingbattery == false && conductivelaunch.holdingbattery == false)
+                    {
+                        canSwitch = false;
 
-                    handtoSwitch = "conductive";
+                        playeranimations.SetBool("switch", true);
+                        playeranimations.SetTrigger("Switch");
+
+                        handtoSwitch = "conductive";
+                    }
+
                 }
-
             }
         }
+       
 
         isGrounded = Physics.SphereCast(groundCheck.position, groundCheckRadius, Vector3.down, out RaycastHit hit, groundCheckRadius + 0.3f, groundLayer);
 
-        float mouseX = Input.GetAxis("Mouse X") * lookSpeedX;
-        float mouseY = Input.GetAxis("Mouse Y") * lookSpeedY;
+        float mouseX;
+        float mouseY;
 
-        targetX -= mouseY;
-        targetX = Mathf.Clamp(targetX, -90f, 90f);
+        if (mobileIcons.isMobile)
+        {
+            mouseX = mobileLookInput.x * lookSpeedX;
+            mouseY = mobileLookInput.y * lookSpeedY;
+        }
+        else
+        {
+            mouseX = Input.GetAxis("Mouse X") * lookSpeedX;
+            mouseY = Input.GetAxis("Mouse Y") * lookSpeedY;
+        }
 
-        targetY += mouseX;
+        if (!squeeze)
+        {
+            targetX -= mouseY;
+            targetX = Mathf.Clamp(targetX, -90f, 90f);
+            targetY += mouseX;
+        }
 
-        rotationX = Mathf.Lerp(rotationX, targetX, 30f * Time.deltaTime);
-        currentY = Mathf.Lerp(currentY, targetY, 30f * Time.deltaTime);
+        if (mobileIcons.isMobile)
+        {
+            rotationX = targetX;
+            currentY = targetY;
+        }
+        else
+        {
+            rotationX = Mathf.Lerp(rotationX, targetX, 30f * Time.deltaTime);
+            currentY = Mathf.Lerp(currentY, targetY, 30f * Time.deltaTime);
+        }
 
-        playerCamera.localRotation = Quaternion.Euler(rotationX, 0f, 0f);
-        transform.rotation = Quaternion.Euler(0f, currentY, 0f);
+        Quaternion normalBodyRotation = Quaternion.Euler(0f, currentY, 0f);
+        Quaternion normalCameraRotation = Quaternion.Euler(rotationX, 0f, 0f);
 
-        float moveX = Input.GetAxisRaw("Horizontal");
-        float moveZ = Input.GetAxisRaw("Vertical");
+        if (lockCamera)
+        {
+            Quaternion targetYaw = squeezeStartBodyRotation * Quaternion.Euler(0f, 35f, 0f);
+
+            transform.localRotation = Quaternion.Lerp(
+                transform.localRotation,
+                targetYaw,
+                squeezeCameraLerpSpeed * Time.deltaTime
+            );
+        }
+        else if (unlockingCamera)
+        {
+            unlockTimer += Time.deltaTime;
+            float t = unlockTimer / unlockDuration;
+
+            transform.localRotation = Quaternion.Slerp(
+                unlockStartBodyRotation,
+                normalBodyRotation,
+                t
+            );
+
+            playerCamera.localRotation = Quaternion.Slerp(
+                unlockStartCameraRotation,
+                normalCameraRotation,
+                t
+            );
+
+            if (t >= 1f)
+            {
+                unlockingCamera = false;
+            }
+        }
+        else
+        {
+            playerCamera.localRotation = normalCameraRotation;
+            transform.localRotation = normalBodyRotation;
+        }
+
+
+        float moveX;
+        float moveZ;
+
+        if (mobileIcons.isMobile)
+        {
+            if (mobileJoystick != null)
+                mobileMoveInput = mobileJoystick.GetInput();
+
+            moveX = mobileMoveInput.x;
+            moveZ = mobileMoveInput.y;
+        }
+        else
+        {
+            moveX = Input.GetAxisRaw("Horizontal");
+            moveZ = Input.GetAxisRaw("Vertical");
+        }
+
+        if (!CanMove)
+        {
+            moveX = 0f;
+            moveZ = 0f;
+
+            mobileMoveInput = Vector2.zero;
+            currentMoveDirection = Vector3.zero;
+
+            playeranimations.SetBool("walk", false);
+        }
+
+        if (squeeze)
+        {
+            moveX = 0f;
+        }
 
         Vector3 rawDirection = transform.right * moveX + transform.forward * moveZ;
 
@@ -215,9 +468,19 @@ public class RigidboyPlayerController : MonoBehaviour
         );
 
         moveDirection = currentMoveDirection.normalized;
-        if (moveX != 0 || moveZ != 0)
+
+        if (squeeze)
+        {
+            if (moveDirection.magnitude > 0.1f)
+                playeranimations.speed = 1f;
+            else
+                playeranimations.speed = 0f;
+        }
+
+        if ((moveX != 0 || moveZ != 0))
         {
             playeranimations.SetBool("walk", true);
+
             if (footstepCoroutine == null)
             {
                 footstepCoroutine = StartCoroutine(PlayFootsteps());
@@ -226,6 +489,7 @@ public class RigidboyPlayerController : MonoBehaviour
         else
         {
             playeranimations.SetBool("walk", false);
+
             if (footstepCoroutine != null)
             {
                 StopCoroutine(footstepCoroutine);
@@ -244,58 +508,152 @@ public class RigidboyPlayerController : MonoBehaviour
 
         if (!IsCrouched)
         {
-            if (Input.GetKey(KeyCode.LeftShift))
+            if (!squeeze)
             {
-                targetMoveSpeed = moveSpeed * sprintMultiplier;
-                playeranimations.speed = 1.6f;
+                bool sprinting;
+
+                if (mobileIcons.isMobile)
+                {
+                    if (mobileMoveInput.y > 0.9f)
+                    {
+                        if (Time.time - lastTapTime < tapThreshold)
+                        {
+                            sprinting = true;
+                        }
+                        else
+                        {
+                            sprinting = false;
+                        }
+
+                        lastTapTime = Time.time;
+                    }
+                    else
+                    {
+                        sprinting = false;
+                    }
+                }
+                else
+                {
+                    sprinting = Input.GetKey(KeyCode.LeftShift);
+                }
+
+
+                if (sprinting)
+                {
+                    targetMoveSpeed = moveSpeed * sprintMultiplier;
+                    playeranimations.speed = 1.6f;
+                }
+                else
+                {
+                    targetMoveSpeed = moveSpeed;
+                    playeranimations.speed = 1f;
+                }
             }
-            else
-            {
-                targetMoveSpeed = moveSpeed;
-                playeranimations.speed = 1f;
-            }
+           
         }
 
         if (isGrounded)
         {
-            if (Input.GetKeyDown(KeyCode.LeftControl) && !IsCrouched)
-            {
-                targetMoveSpeed = moveSpeed * crouchMultiplier;
-                playeranimations.speed = 1f;
+            bool crouchPressed;
 
-                IsCrouched = true;
-                croucher.SetBool("Crouched", true);
-                playeranimations.SetBool("crouch", true);
-                playerstandingCollider.enabled = false;
-
-                footstepSource.PlayOneShot(crouchsfx, 1.0f); 
-            }
-            else if (Input.GetKeyUp(KeyCode.LeftControl) && IsCrouched)
+            if (!squeeze)
             {
-                if (CanStandUp())
+                if (mobileIcons.isMobile)
                 {
-                    croucher.SetBool("Crouched", false);
-                    playeranimations.SetBool("crouch", false);
-                    IsCrouched = false;
-                    playerstandingCollider.enabled = true;
+                    crouchPressed = crouchToggled;
+                }
+                else
+                {
+                    crouchPressed = Input.GetKeyDown(KeyCode.LeftControl);
+                }
 
-                    footstepSource.PlayOneShot(uncrouchsfx, 1.0f); 
+                if (isGrounded)
+                {
+                    if (mobileIcons.isMobile)
+                    {
+                        if (crouchToggled && !IsCrouched)
+                        {
+                            EnterCrouch();
+                        }
+                        else if (!crouchToggled && IsCrouched)
+                        {
+                            if (CanStandUp())
+                                ExitCrouch();
+                        }
+                    }
+                    else
+                    {
+                        if (Input.GetKeyDown(KeyCode.LeftControl) && !IsCrouched)
+                        {
+                            EnterCrouch();
+                        }
+                        else if (Input.GetKeyUp(KeyCode.LeftControl) && IsCrouched)
+                        {
+                            if (CanStandUp())
+                                ExitCrouch();
+                        }
+                    }
                 }
             }
+
+
         }
 
+        if (squeeze)
+        {
+            targetMoveSpeed = squeezeSpeed;
+        }
         currentMoveSpeed = Mathf.Lerp(currentMoveSpeed, targetMoveSpeed, sprintAcceleration * Time.deltaTime);
 
-        if (!IsCrouched && Input.GetButtonDown("Jump") && isGrounded)
+        bool jumpPressed = mobileIcons.isMobile ? mobileJump : Input.GetButtonDown("Jump");
+
+        if (!IsCrouched && jumpPressed && isGrounded)
         {
-            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-            footstepSource.PlayOneShot(jumpsfx, 3.0f);
+
+            if (!squeeze)
+            {
+                rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+                footstepSource.PlayOneShot(jumpsfx, 3.0f);
+            }
+
 
         }
+
+        mobileJump = false;
     }
+
+    void EnterCrouch()
+    {
+        targetMoveSpeed = moveSpeed * crouchMultiplier;
+        playeranimations.speed = 1f;
+
+        IsCrouched = true;
+        croucher.SetBool("Crouched", true);
+        playeranimations.SetBool("crouch", true);
+        playerstandingCollider.enabled = false;
+
+        footstepSource.PlayOneShot(crouchsfx, 1.0f);
+    }
+
+    void ExitCrouch()
+    {
+        croucher.SetBool("Crouched", false);
+        playeranimations.SetBool("crouch", false);
+        IsCrouched = false;
+        playerstandingCollider.enabled = true;
+
+        footstepSource.PlayOneShot(uncrouchsfx, 1.0f);
+    }
+
 
     private void FixedUpdate()
     {
+        if (!CanMove)
+        {
+            rb.velocity = Vector3.zero;
+            return;
+        }
+
         rb.velocity = new Vector3(
             moveDirection.x * currentMoveSpeed,
             rb.velocity.y,
@@ -452,5 +810,130 @@ public class RigidboyPlayerController : MonoBehaviour
         {
             footstepSource.Stop();
         }
+    }
+
+    public void MobileSwitchRed()
+    {
+        if (!mobileIcons.isMobile) return;
+        if (!handmanager.hasRedHand) return;
+        if (!CanSwitchHands()) return;
+
+        if (!RedHand.activeSelf)
+        {
+            handtoSwitch = "red";
+            TriggerSwitch();
+            canSwitch = false;
+            righthandIcon.color = red;
+            switchmenu.closed();
+
+        }
+    }
+
+    public void MobileSwitchPurple()
+    {
+        if (!mobileIcons.isMobile) return;
+        if (!handmanager.hasPurpleHand) return;
+        if (!CanSwitchHands()) return;
+
+        if (!PurpleHand.activeSelf)
+        {
+            handtoSwitch = "purple";
+            TriggerSwitch();
+            canSwitch = false;
+            righthandIcon.color = purple;
+            switchmenu.closed();
+
+        }
+    }
+
+    public void MobileSwitchFlare()
+    {
+        if (!mobileIcons.isMobile) return;
+        if (!handmanager.hasPressureHand) return;
+        if (!CanSwitchHands()) return;
+
+        if (!FlareHand.activeSelf)
+        {
+            handtoSwitch = "flare";
+            TriggerSwitch();
+            canSwitch = false;
+            righthandIcon.color = grey;
+            switchmenu.closed();
+
+        }
+    }
+
+    public void MobileSwitchConductive()
+    {
+        if (!mobileIcons.isMobile) return;
+        if (!handmanager.hasConductiveHand) return;
+        if (!CanSwitchHands()) return;
+
+        if (!conductiveHand.activeSelf)
+        {
+            handtoSwitch = "conductive";
+            TriggerSwitch();
+            canSwitch = false;
+            righthandIcon.color = yellow;
+            switchmenu.closed();
+        }
+    }
+
+    bool CanSwitchHands()
+    {
+        if (redcable.isActive || purplecable.isActive || pressurecable.isActive || conductivecable.isActive)
+            return false;
+
+        if (redlaunch.holdingbattery || purplelaunch.holdingbattery || pressurelaunch.holdingbattery || conductivelaunch.holdingbattery)
+            return false;
+
+        return true;
+    }
+
+    void TriggerSwitch()
+    {
+        playeranimations.SetBool("switch", true);
+        playeranimations.SetTrigger("Switch");
+    }
+
+
+    LaunchHand GetActiveHand(string side)
+    {
+        foreach (LaunchHand hand in allLaunchHands)
+        {
+            if (hand.Hand == side && hand.gameObject.activeInHierarchy)
+                return hand;
+        }
+        return null;
+    }
+
+
+
+    public void MobileFireDownLeft()
+    {
+        LaunchHand hand = GetActiveHand("Left");
+        if (hand != null)
+            hand.UIButtonDown();
+    }
+
+    public void MobileFireUpLeft()
+    {
+        LaunchHand hand = GetActiveHand("Left");
+        if (hand != null)
+            hand.UIButtonUp();
+    }
+
+    public void MobileFireDownRight()
+    {
+        LaunchHand hand = GetActiveHand("Right");
+        if (hand != null)
+            hand.UIButtonDown();
+    }
+
+    public void MobileFireUpRight()
+    {
+        LaunchHand hand = GetActiveHand("Right");
+        if (hand != null)
+            hand.UIButtonUp();
     }
 }

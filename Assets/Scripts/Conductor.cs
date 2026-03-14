@@ -25,6 +25,14 @@ public class Conductor : MonoBehaviour
     public GameObject freezing;
     public GameObject heat;
 
+    void OnEnable()
+    {
+        CurrentElement = "none";
+        UpdateElement(CurrentElement);
+
+        elementcounter = ElementTime;
+    }
+
     public void UpdateElement(string element)
     {
         CurrentElement = element;

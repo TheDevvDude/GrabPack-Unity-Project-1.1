@@ -14,6 +14,21 @@ public class SwingHandle : MonoBehaviour
     public AudioSource globalaudio;
     public AudioClip swingsfx;
 
+    private bool virtualHeld;
+
+    //bool isMobile = Application.isMobilePlatform;
+    bool isMobile = false;
+
+    public void UIButtonDown()
+    {
+        virtualHeld = true;
+    }
+
+    public void UIButtonUp()
+    {
+        virtualHeld = false;
+    }
+
     void FixedUpdate()
     {
         bool rightHandFound = false;
@@ -21,41 +36,43 @@ public class SwingHandle : MonoBehaviour
 
         foreach (Transform child in transform)
         {
-            if (child.name.StartsWith("Hand"))
+            if (!child.name.StartsWith("Hand"))
+                continue;
+
+            anyHandFound = true;
+
+            LaunchHand hand = child.GetComponent<LaunchHand>();
+            if (hand == null)
+                continue;
+
+            bool isHeld = hand.IsHeld();
+
+            bool rightHand =
+                child.name == "Hand_Rocket" ||
+                child.name == "Hand_Red" ||
+                child.name == "Hand_Pressure" ||
+                child.name == "Hand_Conductive";
+
+            bool leftHand = child.name == "Hand_Blue";
+
+            if (rightHand && isHeld)
             {
-                anyHandFound = true;
+                ApplySwingForce();
+                isgrabbingRight = true;
+                rightHandFound = true;
+            }
 
-                bool rightHand =
-                    child.name == "Hand_Rocket" ||
-                    child.name == "Hand_Red" ||
-                    child.name == "Hand_Pressure" ||
-                    child.name == "Hand_Conductive";
-
-                bool leftHand = child.name == "Hand_Blue";
-
-                if (rightHand && Input.GetMouseButton(1))
-                {
-                    ApplySwingForce();
-                    isgrabbingRight = true;
-                    rightHandFound = true;
-                }
-
-                if (leftHand && Input.GetMouseButton(0) && !isgrabbingRight)
-                {
-                    ApplySwingForce();
-                }
+            if (leftHand && isHeld && !isgrabbingRight)
+            {
+                ApplySwingForce();
             }
         }
 
         if (!rightHandFound)
-        {
             isgrabbingRight = false;
-        }
 
         if (!anyHandFound)
-        {
             grabbed = false;
-        }
     }
 
     void ApplySwingForce()

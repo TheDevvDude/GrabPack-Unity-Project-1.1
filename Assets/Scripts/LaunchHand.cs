@@ -1,3 +1,4 @@
+
 using System.Collections;
 using UnityEngine;
 using System.Collections.Generic;
@@ -5,15 +6,21 @@ using UnityEngine.UI;
 
 public class LaunchHand : MonoBehaviour
 {
+    private Coroutine returnRoutine;
+    private Coroutine moveRoutine;
+
+    public LayerMask raycastLayers;
+
+    public Rigidbody ownerRigidbody;
+    public RigidboyPlayerController ownerController;
+
     private bool mouseHeld = false;
     public Transform limonpos;
     private bool awaitingSecondInput = false;
 
-
     private float pressureHoldTimer = 0f;
-    public float pressureStartDelay = 0.5f; 
+    public float pressureStartDelay = 0.5f;
     private bool pressureBuilding = false;
-
 
     private float mouseDownTime;
     public CableManager cableManager;
@@ -29,7 +36,6 @@ public class LaunchHand : MonoBehaviour
     public bool returned = true;
 
     public Animator playeranimations;
-
     public string GrabableLayer;
 
     public bool CanReturn = true;
@@ -38,11 +44,7 @@ public class LaunchHand : MonoBehaviour
 
     public CablePhysics CableSim;
 
-
-    //public LineRenderer cableRenderer;
-
     public GameObject hitOBJ;
-
     public Vector3 selftransform;
 
     public bool holdingbattery = false;
@@ -55,56 +57,101 @@ public class LaunchHand : MonoBehaviour
     public AudioSource globalAudio;
     public AudioClip firesfx;
     public AudioClip grabsfx;
-    public AudioClip dragsfx;
     public GameObject dragsounds;
     public GameObject pressurebuild;
     public AudioClip pressureRelease;
 
     private bool lockReturn = false;
-
     public RotateArms aimOverride;
 
-
+    public bool isRocketHand = false;
     public bool isPressureHand = false;
     public float pressure = 0;
 
     public GameObject SMOKE;
-
     public GameObject gauge;
     public Image guageUI;
     public ParticleSystem impact;
-
     public GameObject Crosshair;
+
+    private bool virtualPressed;
+    private bool virtualHeld;
+    private bool virtualReleased;
+
+    private bool inputDown;
+    private bool inputHeld;
+    private bool inputUp;
+
+
+    private Rigidbody currentDraggedRB;
+    private bool applyDragForce;
+
+    public MobileIcons mobileIcons;
 
     void Start()
     {
-        //cableRenderer.enabled = false;
+        originalParent = handTransform.parent;
+        selftransform = transform.localScale;
 
         originalParent = handTransform.parent;
+        selftransform = transform.localScale;
 
-        selftransform = gameObject.transform.localScale;
+
+    }
+
+    public bool IsHeld()
+    {
+        return inputHeld;
+    }
+
+    public void UIButtonDown()
+    {
+        virtualPressed = true;
+        virtualHeld = true;
+    }
+
+    public void UIButtonUp()
+    {
+        virtualReleased = true;
+        virtualHeld = false;
     }
 
     void Update()
     {
         if (isReturning) return;
 
+        if (ownerController.canSwitch == false) return;
+
+        inputDown = false;
+        inputHeld = false;
+        inputUp = false;
+
         bool isLeft = Hand == "Left";
         bool isRight = Hand == "Right";
 
-        bool mouseDown = (isLeft && Input.GetMouseButtonDown(0)) ||
-                         (isRight && Input.GetMouseButtonDown(1));
-
-        bool mouseHeldNow = (isLeft && Input.GetMouseButton(0)) ||
-                            (isRight && Input.GetMouseButton(1));
-
-        bool mouseUp = (isLeft && Input.GetMouseButtonUp(0)) ||
-                       (isRight && Input.GetMouseButtonUp(1));
-
-        if (mouseDown)
+        if (mobileIcons.isMobile)
         {
-            mouseHeld = true;
+            inputDown = virtualPressed;
+            inputHeld = virtualHeld;
+            inputUp = virtualReleased;
+        }
+        else
+        {
+            inputDown = (isLeft && Input.GetMouseButtonDown(0)) ||
+                        (isRight && Input.GetMouseButtonDown(1));
 
+            inputHeld = (isLeft && Input.GetMouseButton(0)) ||
+                        (isRight && Input.GetMouseButton(1));
+
+            inputUp = (isLeft && Input.GetMouseButtonUp(0)) ||
+                      (isRight && Input.GetMouseButtonUp(1));
+        }
+
+        virtualPressed = false;
+        virtualReleased = false;
+
+        if (inputDown)
+        {
             if (returned)
             {
                 FireHand();
@@ -115,33 +162,147 @@ public class LaunchHand : MonoBehaviour
             if (!returned && !awaitingSecondInput)
             {
                 awaitingSecondInput = true;
-                mouseDownTime = Time.time; 
+                mouseDownTime = Time.time;
                 return;
             }
         }
 
-        if (mouseUp)
+        if (inputUp)
         {
-            mouseHeld = false;
-
-            if (!returned && !awaitingSecondInput)
-            {
-                awaitingSecondInput = true;
-                return;
-            }
-
             if (!returned && awaitingSecondInput)
             {
-                if (!isPressureHand && canDrag == true || isPressureHand && canDrag == false || !isPressureHand && canDrag == false)
+                CanReturn = true;
+                if (!isPressureHand || isPressureHand && pressure == 0)
                 {
-                    CanReturn = true;
-                    StartCoroutine(ReturnHand());
+                    if (returnRoutine == null)
+                    {
+                        returnRoutine = StartCoroutine(ReturnHand());
+                    }
                 }
-
                 awaitingSecondInput = false;
             }
         }
+        if (isPressureHand && inputUp && canDrag)
+        {
+            Debug.Log(canDrag);
+            ReleasePressure();
+        }
+        HandleDraggingState();
+
+
     }
+
+    void ReleasePressure()
+    {
+        GameObject grabbedObj = handTransform.parent?.gameObject;
+        if (grabbedObj == null) return;
+
+        Rigidbody rb = grabbedObj.GetComponent<Rigidbody>();
+        if (rb == null) return;
+
+        if (pressure >= 1f)
+        {
+            Vector3 launchDir = (grabbedObj.transform.position - handOrigin.position).normalized;
+            float launchForce = pressure * 50f;
+
+            rb.isKinematic = false;
+            rb.AddForce(launchDir * launchForce, ForceMode.Impulse);
+
+            impact.Play();
+            globalAudio.PlayOneShot(pressureRelease, 2.0f);
+        }
+        if (pressure > 9)
+        {
+            Breakable breakable = grabbedObj.GetComponent<Breakable>();
+            if (breakable != null)
+            {
+                breakable.breakObject();
+            }
+            
+        }
+
+        pressure = 0f;
+        pressureHoldTimer = 0f;
+        pressureBuilding = false;
+
+        SMOKE.SetActive(false);
+        gauge.SetActive(false);
+        pressurebuild.SetActive(false);
+        Crosshair.SetActive(true);
+
+        CanReturn = true;
+        canDrag = false;
+        if (returnRoutine == null)
+        {
+            returnRoutine = StartCoroutine(ReturnHand());
+        }
+    }
+
+    void HandleDraggingState()
+    {
+        if (CanReturn || !canDrag || isReturning)
+        {
+            applyDragForce = false;
+            dragsounds.SetActive(false);
+            return;
+        }
+
+        if (!inputHeld)
+        {
+            applyDragForce = false;
+            dragsounds.SetActive(false);
+            return;
+        }
+
+        GameObject grabbed = handTransform.parent?.gameObject;
+        if (grabbed == null) return;
+
+        Rigidbody rb = grabbed.GetComponent<Rigidbody>();
+        if (rb == null) return;
+
+        currentDraggedRB = rb;
+        applyDragForce = true;
+
+        if (!isPressureHand)
+        {
+            dragsounds.SetActive(true);
+        }
+        else
+        {
+            pressureHoldTimer += Time.deltaTime;
+
+            if (pressureHoldTimer >= pressureStartDelay)
+            {
+                SMOKE.SetActive(true);
+                gauge.SetActive(true);
+                pressurebuild.SetActive(true);
+                Crosshair.SetActive(false);
+
+                pressure += Time.deltaTime * 4f;
+                pressure = Mathf.Min(pressure, 10f);
+                guageUI.fillAmount = pressure / 10f;
+            }
+        }
+    }
+
+    void FixedUpdate()
+    {
+        if (!applyDragForce || currentDraggedRB == null)
+            return;
+
+        if (!isPressureHand)
+        {
+            Vector3 targetPos = handOrigin.position;
+            Vector3 direction = targetPos - currentDraggedRB.position;
+
+            Vector3 force =
+                direction.normalized * (pullSpeed * 600f)
+                - currentDraggedRB.velocity * 8f;
+
+            currentDraggedRB.AddForce(force, ForceMode.Force);
+        }
+    }
+
     public void EnableDrag()
     {
         canDrag = true;
@@ -206,9 +367,13 @@ public class LaunchHand : MonoBehaviour
         handTransform.parent = null;
         returned = false;
         Vector3 targetPoint;
+
+
         Camera cam = Camera.main;
-        Ray ray = cam.ScreenPointToRay(Input.mousePosition);
-        if (Physics.Raycast(ray, out RaycastHit hit, maxRange))
+        Vector3 screenCenter = new Vector3(Screen.width / 2f, Screen.height / 2f, 0f);
+
+
+        Ray ray = cam.ScreenPointToRay(screenCenter); if (Physics.Raycast(ray, out RaycastHit hit, maxRange, raycastLayers))
         {
             targetPoint = hit.point;
 
@@ -266,6 +431,9 @@ public class LaunchHand : MonoBehaviour
                     }
 
                     Invoke("EnableDrag", 0.5f);
+                    pressure = 0f;
+                    pressureHoldTimer = 0f;
+                    pressureBuilding = false;
 
                 }
                 if (LayerMask.LayerToName(hitOBJ.layer) == "Grabanimation" || LayerMask.LayerToName(hitOBJ.layer) == "Minecart" || LayerMask.LayerToName(hitOBJ.layer) == "KeyCard")
@@ -293,9 +461,13 @@ public class LaunchHand : MonoBehaviour
         }
         Vector3 impactPoint = hit.point;
 
-        StartCoroutine(MoveHand(targetPoint, impactPoint));
-    }
+        if (moveRoutine != null)
+        {
+            StopCoroutine(moveRoutine);
+        }
 
+        moveRoutine = StartCoroutine(MoveHand(targetPoint, impactPoint));
+    }
     private IEnumerator MoveHand(Vector3 target, Vector3 impactPoint)
     {
         Vector3 start = handTransform.position;
@@ -351,8 +523,13 @@ public class LaunchHand : MonoBehaviour
 
         if (CanReturn)
         {
-            StartCoroutine(ReturnHand());
+            if (returnRoutine == null)
+            {
+                returnRoutine = StartCoroutine(ReturnHand());
+            }
         }
+
+        moveRoutine = null;
     }
 
     private IEnumerator UnlockReturn()
@@ -366,7 +543,10 @@ public class LaunchHand : MonoBehaviour
         if (lockReturn) return;
 
         CanReturn = true;
-        StartCoroutine(ReturnHand());
+        if (returnRoutine == null)
+        {
+            returnRoutine = StartCoroutine(ReturnHand());
+        }
     }
 
     private IEnumerator ReturnHand()
@@ -389,7 +569,7 @@ public class LaunchHand : MonoBehaviour
 
 
             Rigidbody rb = battery.GetComponent<Rigidbody>();
-            
+
             if (rb != null)
             {
                 battery.transform.parent = null;
@@ -424,7 +604,11 @@ public class LaunchHand : MonoBehaviour
 
 
         isReturning = true;
-        canDrag = false;
+        if (!isPressureHand)
+        {
+            canDrag = false;
+
+        }
         hitOBJ = null;
         Vector3 startPosition = handTransform.position;
         Quaternion startRotation = handTransform.rotation;
@@ -493,148 +677,12 @@ public class LaunchHand : MonoBehaviour
         {
             aimOverride.leftActive = false;
         }
+
+        returnRoutine = null;
     }
     void LateUpdate()
     {
         if (CanReturn || !canDrag || isReturning)
-        {
-            dragsounds.SetActive(false);
-            return;
-        }
-
-        bool leftReleased = Hand == "Left" && Input.GetMouseButtonUp(0);
-        bool rightReleased = Hand == "Right" && Input.GetMouseButtonUp(1);
-
-        if ((leftReleased || rightReleased) && isPressureHand)
-        {
-
-            canDrag = false;
-            CanReturn = true;
-            GameObject grabbedObj = handTransform.parent?.gameObject;
-
-            pressureHoldTimer = 0f;
-            pressureBuilding = false;
-
-            if (grabbedObj != null)
-            {
-                Rigidbody rb = grabbedObj.GetComponent<Rigidbody>();
-                if (rb != null)
-                {
-                    if (!grabbedObj.GetComponent<Breakable>())
-                    {
-                        if (pressure >= 1f)
-                        {
-                            Vector3 launchDir =(grabbedObj.transform.position - handOrigin.position).normalized;
-
-                            float launchForce = pressure * 100f;
-
-                            handgrabbing.SetBool("grabbing", true);
-                            rb.isKinematic = false;
-                            rb.AddForce(launchDir * launchForce, ForceMode.Impulse);
-
-
-                            impact.Play();
-                        }
-
-                    }
-                    else
-                    {
-                        if (pressure > 9f)
-                        {
-                            Breakable breakable =
-                                grabbedObj.GetComponent<Breakable>();
-
-                            breakable.breakObject();
-                            impact.Play();
-                        }
-                    }
-                }
-            }
-
-            SMOKE.SetActive(false);
-            gauge.SetActive(false);
-            if (pressure >= 1f)
-            {
-                globalAudio.PlayOneShot(pressureRelease, 2.0f);
-
-            }
-            pressure = 0f;
-            pressurebuild.SetActive(false);
-
-
-            Crosshair.SetActive(true);
-
-            return1();
-            return; 
-        }
-
-        bool isHandActive =
-            (Hand == "Left" && Input.GetMouseButton(0)) ||
-            (Hand == "Right" && Input.GetMouseButton(1));
-
-        if (!CanReturn && canDrag && isHandActive)
-        {
-            GameObject grabbed = handTransform.parent?.gameObject;
-            if (grabbed == null) return;
-
-            Rigidbody rb = grabbed.GetComponent<Rigidbody>();
-            if (rb == null) return;
-
-            Vector3 targetPos = handOrigin.position;
-            string objectLayer = LayerMask.LayerToName(grabbed.layer);
-
-            if (!isPressureHand)
-            {
-                dragsounds.SetActive(true);
-
-                Vector3 direction = targetPos - rb.position;
-                float distance = direction.magnitude;
-
-                Vector3 dirNormalized = direction.normalized;
-
-                float constantPullForce = pullSpeed * 350; // increase this for stronger pull
-                float damping = 8f;
-
-                Vector3 force =
-                    dirNormalized * constantPullForce
-                    - rb.velocity * damping;
-
-                rb.AddForce(force, ForceMode.Force);
-            }
-            else
-            {
-                pressureHoldTimer += Time.deltaTime;
-
-                if (pressureHoldTimer >= pressureStartDelay)
-                {
-                    pressureBuilding = true;
-
-                    SMOKE.SetActive(true);
-                    gauge.SetActive(true);
-                    pressurebuild.SetActive(true);
-                    Crosshair.SetActive(false);
-
-                    if (pressure < 10f)
-                    {
-                        pressure += Time.deltaTime * 4f;
-                        pressure = Mathf.Min(pressure, 10f);
-                        guageUI.fillAmount = pressure / 10f;
-                    }
-                }
-
-                Breakable breakable = grabbed.GetComponent<Breakable>();
-                if (breakable != null && breakable.SwitchMaterials)
-                {
-                    if (pressure < 5f)
-                        breakable.renderer.material = breakable.pristine;
-                    else if (pressure <= 9f)
-                        breakable.renderer.material = breakable.damaged;
-                    else
-                        breakable.renderer.material = breakable.broken;
-                }
-            }
-        }
-        else
         {
             dragsounds.SetActive(false);
         }
@@ -667,6 +715,7 @@ public class LaunchHand : MonoBehaviour
             aimOverride.leftActive = false;
         }
     }
+
 
 
 }

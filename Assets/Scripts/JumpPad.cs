@@ -1,91 +1,102 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
+[RequireComponent(typeof(AudioSource))]
 public class JumpPad : MonoBehaviour
 {
-    public Rigidbody Player;
     public float jumpForce = 10f;
-    public LaunchHand rockethand;
-
-    public bool launched = false;
-
-    public bool Powered = true;
-    public ElectricalReciever powerSource;
-
-    public Material poweredmatieral;
-    public Material offMaterial;
-    public MeshRenderer renderer;
-
-    public GameObject light;
-
-    public RigidboyPlayerController player;
-
-    public AudioSource GlobalAudio;
-    public AudioClip boostsfx;
-
-    public GameObject rocketHand;
-
     public float maxBoostDistance = 10f;
     public float minBoostMultiplier = 0.2f;
-
     public float cooldownTime = 2f;
-    private float cooldownTimer = 0f;
+
+    [Header("Power (Optional)")]
+    public ElectricalReciever powerSource;
+
+    public Material poweredMaterial;
+    public Material offMaterial;
+    public GameObject lightObject;
+
+    public AudioClip boostSFX;
+
+    private AudioSource audioSource;
+    private MeshRenderer meshRenderer;
+
+    private float cooldownTimer;
+    private bool launched;
+    private bool Powered;
+
+
+    void Awake()
+    {
+        audioSource = GetComponent<AudioSource>();
+
+        Powered = powerSource == null || powerSource.CircuitComplete;
+
+        ApplyVisualState();
+    }
 
     void Update()
     {
-        if (cooldownTimer > 0)
-            cooldownTimer -= Time.deltaTime;
+        HandlePowerState();
+        cooldownTimer -= Time.deltaTime;
+    }
 
-        bool handAttached = rocketHand != null &&
-                            rocketHand.activeInHierarchy &&
-                            rocketHand.transform.IsChildOf(transform);
+    private void HandlePowerState()
+    {
+        bool shouldBePowered = powerSource == null || powerSource.CircuitComplete;
 
-        if (handAttached)
-        {
-            if (cooldownTimer > 0)
-            {
-                rockethand.return1();
-                return;
-            }
+        if (shouldBePowered == Powered)
+            return;
 
-            if (!launched && Powered)
-            {
-                float baseForce = player.isGrounded ? jumpForce : jumpForce / 2f;
+        Powered = shouldBePowered;
+        ApplyVisualState();
+    }
 
-                float distance = Vector3.Distance(Player.transform.position, transform.position);
+    private void ApplyVisualState()
+    {
 
-                float distanceMultiplier = Mathf.Clamp01(1 - (distance / maxBoostDistance));
-                distanceMultiplier = Mathf.Lerp(minBoostMultiplier, 1f, distanceMultiplier);
 
-                float finalForce = baseForce * distanceMultiplier;
+        if (lightObject != null)
+            lightObject.SetActive(Powered);
+    }
 
-                Player.velocity = Vector3.zero;
-                Player.AddForce(transform.up * finalForce, ForceMode.Impulse);
+    void OnTransformChildrenChanged()
+    {
 
-                launched = true;
-                cooldownTimer = cooldownTime;
+        Debug.Log("Children changed!");
+    
 
-                rockethand.return1();
-                GlobalAudio.PlayOneShot(boostsfx, 1.0f);
-            }
-        }
-        else
-        {
-            launched = false;
-        }
+        if (!Powered || cooldownTimer > 0)
+            return;
 
-        if (!Powered && powerSource.CircuitComplete)
-        {
-            Powered = true;
-            renderer.material = poweredmatieral;
-            light.SetActive(true);
-        }
-        else if (Powered && !powerSource.CircuitComplete)
-        {
-            Powered = false;
-            renderer.material = offMaterial;
-            light.SetActive(false);
-        }
+        LaunchHand hand = GetComponentInChildren<LaunchHand>();
+        if (hand == null)
+            return;
+
+        if (hand.isRocketHand == false)
+            return;
+
+        Rigidbody playerRb = hand.ownerRigidbody;
+        RigidboyPlayerController player = hand.ownerController;
+
+        if (playerRb == null)
+            return;
+
+        float baseForce = player != null && player.isGrounded ? jumpForce : jumpForce / 2f;
+
+        float distance = Vector3.Distance(playerRb.position, transform.position);
+        float distanceMultiplier = Mathf.Clamp01(1 - (distance / maxBoostDistance));
+        distanceMultiplier = Mathf.Lerp(minBoostMultiplier, 1f, distanceMultiplier);
+
+        float finalForce = baseForce * distanceMultiplier;
+
+        playerRb.velocity = Vector3.zero;
+        playerRb.AddForce(transform.up * finalForce, ForceMode.Impulse);
+
+        hand.return1();
+
+        if (boostSFX != null)
+            audioSource.PlayOneShot(boostSFX);
+
+        cooldownTimer = cooldownTime;
     }
 }

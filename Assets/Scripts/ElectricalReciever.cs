@@ -1,58 +1,59 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
+using System.Collections.Generic;
 
 public class ElectricalReciever : MonoBehaviour
 {
-    public List<PowerPole> polesInPuzzle;
-    public bool CircuitComplete = false;
+    [SerializeField] private List<PowerPole> polesInPuzzle;
+    [SerializeField] private AudioSource globalAudio;
+    [SerializeField] private AudioClip puzzleCompleteSFX;
 
-    public AudioSource GlobalAudio;
-    public AudioClip puzzlecomplete;
+    public bool CircuitComplete;
 
-    private bool complete = false;
+    private bool complete;
 
-    public GameObject[] hands;
-
-    void Start()
-    {
-
-    }
-
-    // Update is called once per frame
     void Update()
     {
-        if (AllPolesPowered())
+        if (complete) return;
+
+        if (AllPolesPowered() && HasHandAttached())
         {
-
-            foreach (GameObject hand in hands)
-            {
-                if (hand != null && hand.activeInHierarchy && hand.transform.parent == transform)
-                {
-                    CircuitComplete = true;
-
-                    if (!complete)
-                    {
-                        GlobalAudio.PlayOneShot(puzzlecomplete, 1.0f);
-                        complete = true;
-                        ReturnAllHands();
-                    }
-                }
-            }
-
+            CompleteCircuit();
         }
     }
 
-    bool AllPolesPowered()
+    private bool AllPolesPowered()
     {
         foreach (PowerPole pole in polesInPuzzle)
         {
-            if (!pole.powered) return false;
+            if (!pole.powered)
+                return false;
         }
         return true;
     }
 
-    void ReturnAllHands()
+    private bool HasHandAttached()
+    {
+        foreach (Transform child in transform)
+        {
+            if (child.GetComponent<LaunchHand>() != null)
+                return true;
+        }
+
+        return false;
+    }
+
+    private void CompleteCircuit()
+    {
+        CircuitComplete = true;
+        complete = true;
+
+        if (globalAudio != null && puzzleCompleteSFX != null)
+            globalAudio.PlayOneShot(puzzleCompleteSFX);
+
+        ReturnAllHands();
+    }
+
+    private void ReturnAllHands()
     {
         LaunchHand[] hands = FindObjectsOfType<LaunchHand>();
 

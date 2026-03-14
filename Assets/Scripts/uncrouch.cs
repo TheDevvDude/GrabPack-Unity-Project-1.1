@@ -30,6 +30,8 @@ public class uncrouch : MonoBehaviour
     {
         player.playeranimations.SetBool("switch", false);
 
-
+        player.canSwitch = true;
     }
+
+
 }

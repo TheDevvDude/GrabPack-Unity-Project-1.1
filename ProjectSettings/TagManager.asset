@@ -31,9 +31,9 @@ TagManager:
   - PostProcessing
   - grabpackpickup
   - HandPickup
-  - 
-  - 
-  - 
+  - points
+  - monster
+  - EMUpickup
   - 
   - 
   - 

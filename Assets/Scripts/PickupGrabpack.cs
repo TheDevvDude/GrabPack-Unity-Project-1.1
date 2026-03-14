@@ -26,6 +26,9 @@ public class PickupGrabpack : MonoBehaviour
 
     public HandManager handmanager;
 
+    public RigidboyPlayerController player;
+    public MobileIcons mobileicons;
+
 
     public void Pickup()
     {
@@ -54,6 +57,15 @@ public class PickupGrabpack : MonoBehaviour
         handmanager.hasPressureHand = hasPressureHand;
         handmanager.hasPurpleHand = hasPurpleHand;
         handmanager.hasConductiveHand = hasConductiveHand;
+
+        player.UpdateHandButtons();
+
+        if (mobileicons.isMobile)
+        {
+            mobileicons.UpdateMobileIcons();
+
+        }
+
     }
 
     void Start()

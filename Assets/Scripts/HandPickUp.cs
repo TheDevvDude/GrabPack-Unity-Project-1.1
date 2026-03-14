@@ -10,6 +10,8 @@ public class HandPickUp : MonoBehaviour
     public AudioSource globalaudio;
     public AudioClip pickupsx;
 
+    public GameObject Bluehand;
+
     public enum HandType
     {
         Red,
@@ -61,33 +63,43 @@ public class HandPickUp : MonoBehaviour
         {
             case HandType.Red:
                 handmanager.hasRedHand = true;
+                player.UpdateHandButtons();
                 player.handtoSwitch = "red";
                 player.playeranimations.SetTrigger("Switch");
+                player.MobileSwitchRed();
+
                 break;
 
             case HandType.Purple:
                 handmanager.hasPurpleHand = true;
+                player.UpdateHandButtons();
                 player.handtoSwitch = "purple";
                 player.playeranimations.SetTrigger("Switch");
+                player.MobileSwitchPurple();
 
                 break;
 
             case HandType.Pressure:
                 handmanager.hasPressureHand = true;
+                player.UpdateHandButtons();
                 player.handtoSwitch = "flare";
                 player.playeranimations.SetTrigger("Switch");
+                player.MobileSwitchFlare();
 
                 break;
 
             case HandType.Conductive:
                 handmanager.hasConductiveHand = true;
+                player.UpdateHandButtons();
                 player.handtoSwitch = "conductive";
                 player.playeranimations.SetTrigger("Switch");
+                player.MobileSwitchConductive();
 
                 break;
 
             case HandType.Blue:
                 handmanager.hasBlueHand = true;
+                Bluehand.SetActive(true);
                 break;
         }
 

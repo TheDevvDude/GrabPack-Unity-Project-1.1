@@ -32,6 +32,9 @@ public class SettingsManager : MonoBehaviour
     public GameObject Dragsource1;
     public GameObject Dragsource2;
 
+    public MobileIcons mobileIcons;
+
+
     void Start()
     {
         SetupQualityDropdown();
@@ -52,6 +55,12 @@ public class SettingsManager : MonoBehaviour
             open = !open;
             updateOpenStatus(open);
         }
+    }
+
+    public void ToggleOpen()
+    {
+        open = !open;
+        updateOpenStatus(open);
     }
 
     void updateOpenStatus(bool state)
@@ -162,25 +171,54 @@ public class SettingsManager : MonoBehaviour
 
     void LoadSettings()
     {
+        // Sensitivity
         float savedSensitivity = PlayerPrefs.GetFloat(SensitivityKey, 1.5f);
         sensitivitySlider.value = savedSensitivity;
         SetSensitivity(savedSensitivity);
 
-        int savedQuality = PlayerPrefs.GetInt(QualityKey, QualitySettings.GetQualityLevel());
+        //Quality (Mobile Override)
+        bool hasSavedQuality = PlayerPrefs.HasKey(QualityKey);
+
+        int savedQuality;
+
+        if (Application.isMobilePlatform && !hasSavedQuality)
+        {
+            savedQuality = 0;
+            PlayerPrefs.SetInt(QualityKey, 0);
+        }
+        else
+        {
+            savedQuality = PlayerPrefs.GetInt(QualityKey, QualitySettings.GetQualityLevel());
+        }
+
         qualityDropdown.value = savedQuality;
         SetQuality(savedQuality);
 
-        int savedVSync = PlayerPrefs.GetInt(VSyncKey, 1);
+        // VSync
+        int savedVSync = PlayerPrefs.GetInt(VSyncKey, 0);
         vSyncToggle.isOn = savedVSync == 1;
         SetVSync(vSyncToggle.isOn);
 
-        int savedFullScreen = PlayerPrefs.GetInt(FullScreenKey, 1);
-        fullScreenToggle.isOn = savedFullScreen == 1;
-        SetFullscreen(fullScreenToggle.isOn);
+        // Fullscreen (Skip On Mobile)
+        if (!Application.isMobilePlatform)
+        {
+            int savedFullScreen = PlayerPrefs.GetInt(FullScreenKey, 1);
+            fullScreenToggle.isOn = savedFullScreen == 1;
+            SetFullscreen(fullScreenToggle.isOn);
+        }
+        else
+        {
+            fullScreenToggle.gameObject.SetActive(false);
+            resolutionDropdown.gameObject.SetActive(false);
+        }
 
-        int savedResolution = PlayerPrefs.GetInt(ResolutionKey, resolutionDropdown.value);
-        resolutionDropdown.value = savedResolution;
-        SetResolution(savedResolution);
+        //Resolution (PC Only)
+        if (!Application.isMobilePlatform)
+        {
+            int savedResolution = PlayerPrefs.GetInt(ResolutionKey, resolutionDropdown.value);
+            resolutionDropdown.value = savedResolution;
+            SetResolution(savedResolution);
+        }
     }
 
     void UnlockCursor()
@@ -191,7 +229,11 @@ public class SettingsManager : MonoBehaviour
 
     void LockCursor()
     {
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+        if (mobileIcons.isMobile == false)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+
     }
 }
